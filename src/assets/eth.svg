@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg width="64" height="64" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <circle cx="32" cy="32" r="32" fill="#627EEA"/>
+  <path d="M32.5 8V25.75L47 32.5L32.5 8Z" fill="white" fill-opacity="0.6"/>
+  <path d="M32.5 8L18 32.5L32.5 25.75V8Z" fill="white"/>
+  <path d="M32.5 44.25V56L47 34.5L32.5 44.25Z" fill="white" fill-opacity="0.6"/>
+  <path d="M32.5 56V44.25L18 34.5L32.5 56Z" fill="white"/>
+  <path d="M32.5 41.5L47 32.5L32.5 25.75V41.5Z" fill="white" fill-opacity="0.2"/>
+  <path d="M18 32.5L32.5 41.5V25.75L18 32.5Z" fill="white" fill-opacity="0.6"/>
+</svg>
