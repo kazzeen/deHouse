@@ -133,15 +133,15 @@ const HomePage = () => {
             
             <StatsContainer justify="space-between">
               <StatItem>
-                <h3>$125K+</h3>
+                <h3>$5K+</h3>
                 <p>Total Donations</p>
               </StatItem>
               <StatItem>
-                <h3>1,250+</h3>
+                <h3>10+</h3>
                 <p>Contributors</p>
               </StatItem>
               <StatItem>
-                <h3>5</h3>
+                <h3>3</h3>
                 <p>Supported Chains</p>
               </StatItem>
             </StatsContainer>
@@ -153,7 +153,7 @@ const HomePage = () => {
         <Container>
           <Heading level={2} style={{ textAlign: 'center' }}>Why Donate to deHouse?</Heading>
           <Text size="18px" style={{ textAlign: 'center', maxWidth: '700px', margin: '0 auto 48px' }}>
-            Our DAO treasury supports various initiatives and rewards contributors with points.
+            Our DAO treasury supports various initiatives and rewards contributors with truly decentralized RWA ownership and future perks.
           </Text>
           
           <Grid columns={3} gap="32px">
@@ -163,7 +163,7 @@ const HomePage = () => {
               </svg>
               <Heading level={3}>Multi-Chain Support</Heading>
               <Text>
-                Donate using your preferred cryptocurrency across multiple blockchains including Bitcoin, Ethereum, Solana, and more.
+                Donate using your preferred cryptocurrency across multiple blockchains including Bitcoin, Ethereum, and Solana.
               </Text>
             </FeatureCard>
             
@@ -171,9 +171,9 @@ const HomePage = () => {
               <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
               </svg>
-              <Heading level={3}>Secure Transactions</Heading>
+              <Heading level={3}>Complete Transparency</Heading>
               <Text>
-                All donations are processed directly on-chain with no intermediaries, ensuring maximum security and transparency.
+                All donations are processed directly on-chain with no intermediaries, ensuring maximum transparency.
               </Text>
             </FeatureCard>
             

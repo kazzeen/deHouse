@@ -122,23 +122,23 @@ class DatabaseService {
     catch(e) { console.error(`[DB transactionExists] Error for ${txHash}:`, e); return false; }
   }
   async getLeaderboard() {
-    console.log("[DB] Fetching leaderboard data..."); 
+    console.log("[DB] Fetching leaderboard data...");
     const db = await this.dbPromise;
-    try { 
-      const all = await db.getAll('leaderboard'); 
+    try {
+      const all = await db.getAll('leaderboard');
       console.log(`[DB] Found ${all.length} leaderboard entries.`);
-      
+
       // Ensure all entries have valid wallet addresses and points
       const validEntries = all.filter(entry => {
         // More strict validation to prevent glitches
-        return entry && 
-               typeof entry.walletAddress === 'string' && 
+        return entry &&
+               typeof entry.walletAddress === 'string' &&
                entry.walletAddress.trim() !== '' &&
-               !isNaN(entry.points) && 
+               !isNaN(entry.points) &&
                entry.points >= 0;
       });
       console.log(`[DB] Valid entries: ${validEntries.length} of ${all.length}`);
-      
+
       const sorted = validEntries.sort((a, b) => (b.points || 0) - (a.points || 0) || (a.lastDonation || 0) - (b.lastDonation || 0));
       console.log("[DB] Top 5 Leaderboard:", sorted.slice(0, 5).map(e => ({addr: e.walletAddress, pts: e.points}))); // Log relevant parts
       return sorted;
@@ -162,20 +162,69 @@ class DatabaseService {
     try {
       // Use a transaction to ensure atomicity
       const tx = db.transaction(['donations', 'leaderboard'], 'readwrite');
-      
+
       // Clear both stores
       await tx.objectStore('donations').clear();
       console.log('[DB] Donations store cleared');
-      
+
       await tx.objectStore('leaderboard').clear();
       console.log('[DB] Leaderboard store cleared');
-      
+
       // Wait for transaction to complete
       await tx.done;
       console.log('[DB] Database successfully cleared');
       return true;
     } catch (error) {
       console.error('[DB] Error clearing database:', error);
+      return false;
+    }
+  }
+
+  // Directly update the leaderboard with a donation
+  async directUpdateLeaderboard(walletAddress, points, usdValue) {
+    if (!walletAddress) {
+      console.error('[DB] Cannot update leaderboard without wallet address');
+      return false;
+    }
+
+    // Normalize the wallet address
+    const normalizedWalletAddress = walletAddress.toLowerCase();
+    console.log(`[DB] Directly updating leaderboard for ${normalizedWalletAddress} with ${points} points and $${usdValue} USD`);
+
+    const db = await this.dbPromise;
+    try {
+      // Use a transaction to ensure atomicity
+      const tx = db.transaction(['leaderboard'], 'readwrite');
+      const leaderboardStore = tx.objectStore('leaderboard');
+
+      // Get the existing entry for this wallet address
+      const existingEntry = await leaderboardStore.get(normalizedWalletAddress);
+
+      // Create a new entry or update the existing one
+      const newEntry = {
+        walletAddress: normalizedWalletAddress,
+        points: (existingEntry?.points || 0) + points,
+        totalDonated: (existingEntry?.totalDonated || 0) + usdValue,
+        donationCount: (existingEntry?.donationCount || 0) + 1,
+        lastDonation: Date.now()
+      };
+
+      // Sanity checks
+      if (isNaN(newEntry.points) || isNaN(newEntry.totalDonated) || isNaN(newEntry.donationCount) || newEntry.points < 0 || newEntry.totalDonated < 0) {
+        console.error('[DB] Calculated invalid (NaN or negative) value for leaderboard entry:', newEntry, 'Existing:', existingEntry);
+        throw new Error(`Cannot update leaderboard with invalid calculated value for ${normalizedWalletAddress}.`);
+      }
+
+      // Update the leaderboard
+      console.log(`[DB] Putting new/updated entry for ${normalizedWalletAddress}:`, newEntry);
+      await leaderboardStore.put(newEntry);
+
+      // Wait for transaction to complete
+      await tx.done;
+      console.log(`[DB] Successfully updated leaderboard for ${normalizedWalletAddress}`);
+      return true;
+    } catch (error) {
+      console.error(`[DB] Error updating leaderboard for ${normalizedWalletAddress}:`, error);
       return false;
     }
   }

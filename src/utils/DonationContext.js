@@ -110,10 +110,13 @@ export const DonationProvider = ({ children }) => {
         const usdValue = amount * rate;
         const points = calculatePoints(usdValue);
 
+        // Ensure wallet address is normalized (lowercase)
+        const normalizedWalletAddress = walletAddress.toLowerCase();
+
         const donation = {
             id: `manual-${Date.now()}`,
             timestamp: Date.now(),
-            walletAddress: walletAddress, // Use connected wallet address
+            walletAddress: normalizedWalletAddress, // Use normalized wallet address
             amount,
             currency: currency.toUpperCase(),
             usdValue,
@@ -122,13 +125,26 @@ export const DonationProvider = ({ children }) => {
             chain: 'MANUAL',
         };
         console.log('[Context] Recording manual donation:', donation);
+
+        // Step 1: Add the donation to the database
         const added = await databaseService.addDonation(donation);
-        if (added) {
+
+        // Step 2: Directly update the leaderboard (this is the key fix)
+        const leaderboardUpdated = await databaseService.directUpdateLeaderboard(
+            normalizedWalletAddress,
+            points,
+            usdValue
+        );
+
+        if (added && leaderboardUpdated) {
+            console.log('[Context] Donation added and leaderboard updated successfully, reloading data...');
+            // Reload user stats and leaderboard after adding the donation
             await loadUserData(); // Reload user stats after manual add
             await loadLeaderboard(); // Force leaderboard refresh
             return added;
         } else {
-            throw new Error("Failed to add manual donation to database.");
+            console.error('[Context] Failed to add donation to database or update leaderboard');
+            throw new Error("Failed to add manual donation to database or update leaderboard.");
         }
     } catch (error) {
         console.error('[Context] Error recording manual donation:', error);
@@ -144,7 +160,21 @@ export const DonationProvider = ({ children }) => {
     setIsLoading(true);
     try {
       const result = await blockchainListenerService.verifyTransaction(txHash, currency);
-      if (result.verified) {
+
+      if (result.verified && result.donation) {
+        // If verification was successful, directly update the leaderboard
+        const leaderboardUpdated = await databaseService.directUpdateLeaderboard(
+          walletAddress.toLowerCase(),
+          result.donation.points,
+          result.donation.usdValue
+        );
+
+        if (leaderboardUpdated) {
+          console.log('[Context] Leaderboard updated successfully after verification');
+        } else {
+          console.error('[Context] Failed to update leaderboard after verification');
+        }
+
         console.log('[Context] Verification successful, reloading data.');
         await loadUserData(); // Reload user stats
         await loadLeaderboard(); // Force leaderboard refresh
@@ -204,6 +234,8 @@ export const DonationProvider = ({ children }) => {
         verifyDonation, // Manual verification
         getUserRank,    // Get current user's rank
         refreshLeaderboard: loadLeaderboard, // Expose manual refresh
+        loadLeaderboard, // Expose loadLeaderboard directly
+        loadUserData,    // Expose loadUserData directly
         clearDatabase // Expose database clearing function
       }}
     >
