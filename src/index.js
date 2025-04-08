@@ -7,6 +7,7 @@ import Footer from './components/Footer';
 import HomePage from './pages/HomePage';
 import DonatePage from './pages/DonatePage';
 import LeaderboardPage from './pages/LeaderboardPage';
+import AboutPage from './pages/AboutPage';
 import { WalletProvider } from './utils/WalletContext';
 import { DonationProvider } from './utils/DonationContext';
 
@@ -16,12 +17,25 @@ const App = () => {
       <DonationProvider>
         <Router>
           <GlobalStyle />
-          <Header />
-          <main>
+          <div style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            zIndex: 99999
+          }}>
+            <Header />
+          </div>
+          <main style={{
+            position: 'relative',
+            zIndex: 1,
+            marginTop: '80px' /* Add margin to accommodate fixed header */
+          }}>
             <Routes>
               <Route path="/" element={<HomePage />} />
               <Route path="/donate" element={<DonatePage />} />
               <Route path="/leaderboard" element={<LeaderboardPage />} />
+              <Route path="/about" element={<AboutPage />} />
             </Routes>
           </main>
           <Footer />

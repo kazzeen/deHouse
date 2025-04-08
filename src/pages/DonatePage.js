@@ -5,6 +5,7 @@ import WalletConnectButton from '../components/WalletConnectButton';
 import { useWallet } from '../utils/WalletContext';
 import { useDonation } from '../utils/DonationContext';
 import { QRCodeSVG } from 'qrcode.react';
+import { useNavigate } from 'react-router-dom';
 
 // Import crypto icons
 import btcIcon from '../assets/btc.svg';
@@ -91,6 +92,7 @@ const SuccessMessage = styled.div`
 `;
 
 const DonatePage = () => {
+  const navigate = useNavigate();
   const { isConnected, walletAddress, walletType } = useWallet();
   const { recordDonation, verifyDonation, isLoading } = useDonation();
   
@@ -308,7 +310,7 @@ const DonatePage = () => {
               <Heading level={4}>Donation Verified Successfully!</Heading>
               <Text mb="8px">Thank you for your donation. Your points have been added to your account.</Text>
               <Text mb="0">You earned <strong>{pointsEarned} points</strong> for your donation of {donationAmount} {cryptoInfo[selectedCrypto].symbol.split('/')[0]}.</Text>
-              <Button style={{ marginTop: '16px' }} onClick={() => window.location.href = '/leaderboard'}>
+              <Button style={{ marginTop: '16px' }} onClick={() => navigate('/leaderboard')}>
                 View Leaderboard
               </Button>
             </SuccessMessage>
