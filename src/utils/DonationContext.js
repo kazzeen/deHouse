@@ -3,6 +3,13 @@ import { useWallet } from './WalletContext';
 import databaseService from './DatabaseService';
 import blockchainListenerService from './BlockchainListenerService';
 
+// Helper function to calculate points (example: 1 point per USD)
+const calculatePoints = (usdValue) => {
+  // Adjust this logic as per your project's requirements
+  // For example, 1 point per USD donated, rounded down.
+  return Math.floor(usdValue);
+};
+
 // Create a context for donation tracking
 export const DonationContext = createContext();
 
@@ -102,36 +109,82 @@ export const DonationProvider = ({ children }) => {
   // Function to manually record a donation (mostly for testing/fallback)
   const recordDonation = async (amount, currency) => {
     if (!isConnected || !walletAddress) throw new Error('Wallet not connected');
+
+    // Validate amount: Ensure it's a non-negative number
+    const numericAmount = parseFloat(amount);
+    if (isNaN(numericAmount) || numericAmount < 0) {
+        console.error('[Context] Invalid amount for manual donation. Amount must be a non-negative number. Received:', amount);
+        throw new Error('Invalid donation amount: Must be a non-negative number.');
+    }
+
+    // Validate currency: Ensure it's a non-empty string
+    if (!currency || typeof currency !== 'string' || currency.trim() === '') {
+        console.error('[Context] Invalid currency for manual donation. Currency must be a non-empty string. Received:', currency);
+        throw new Error('Invalid currency: Must be a non-empty string.');
+    }
+
     setIsLoading(true);
     try {
         // NOTE: This uses hardcoded rates, ONLY for manual entry. Real donations rely on listeners.
         const fallbackRates = { btc: 60000, eth: 3000, sol: 150, usdc: 1, usdt: 1, dai: 1 };
-        const rate = fallbackRates[currency.toLowerCase()] || 0;
-        const usdValue = amount * rate;
-        const points = calculatePoints(usdValue);
+        const lowerCurrency = currency.toLowerCase().trim(); // Trim whitespace
+        const rate = fallbackRates[lowerCurrency] || 0;
+
+        let usdValue = numericAmount * rate;
+        // Safeguard against NaN for usdValue (though less likely with prior numericAmount validation)
+        if (isNaN(usdValue)) {
+            console.warn(`[Context] Calculated usdValue is NaN (Amount: ${numericAmount}, Rate: ${rate}). Defaulting to 0.`);
+            usdValue = 0;
+        }
+
+        let points = calculatePoints(usdValue);
+        // Safeguard against NaN for points (calculatePoints(NaN) is NaN)
+        if (isNaN(points)) {
+            console.warn(`[Context] Calculated points is NaN (USD Value: ${usdValue}). Defaulting to 0.`);
+            points = 0;
+        }
+
+        // Ensure wallet address is normalized (lowercase)
+        const normalizedWalletAddress = walletAddress.toLowerCase();
 
         const donation = {
             id: `manual-${Date.now()}`,
             timestamp: Date.now(),
-            walletAddress: walletAddress, // Use connected wallet address
-            amount,
+            walletAddress: normalizedWalletAddress, // Use normalized wallet address
+            amount: numericAmount, // Use validated numeric amount
             currency: currency.toUpperCase(),
-            usdValue,
-            points,
+            usdValue, // Use potentially corrected usdValue
+            points,   // Use potentially corrected points
             txHash: `manual_${Date.now().toString(16)}`,
             chain: 'MANUAL',
         };
         console.log('[Context] Recording manual donation:', donation);
+
+        // Step 1: Add the donation to the database
         const added = await databaseService.addDonation(donation);
-        if (added) {
+
+        // Step 2: Directly update the leaderboard
+        const leaderboardUpdated = await databaseService.directUpdateLeaderboard(
+            normalizedWalletAddress,
+            points,
+            usdValue
+        );
+
+        if (added && leaderboardUpdated) {
+            console.log('[Context] Donation added and leaderboard updated successfully, reloading data...');
+            // Reload user stats and leaderboard after adding the donation
             await loadUserData(); // Reload user stats after manual add
             await loadLeaderboard(); // Force leaderboard refresh
-            return added;
+            return added; // Or a more meaningful success object
         } else {
-            throw new Error("Failed to add manual donation to database.");
+            // Log which part failed if possible
+            if (!added) console.error('[Context] Failed to add donation to database.');
+            if (!leaderboardUpdated) console.error('[Context] Failed to update leaderboard.');
+            throw new Error("Failed to add manual donation to database or update leaderboard.");
         }
     } catch (error) {
         console.error('[Context] Error recording manual donation:', error);
+        // Re-throw the error so the caller can handle it, or return a specific error structure
         throw error;
     } finally {
         setIsLoading(false);
@@ -144,7 +197,21 @@ export const DonationProvider = ({ children }) => {
     setIsLoading(true);
     try {
       const result = await blockchainListenerService.verifyTransaction(txHash, currency);
-      if (result.verified) {
+
+      if (result.verified && result.donation) {
+        // If verification was successful, directly update the leaderboard
+        const leaderboardUpdated = await databaseService.directUpdateLeaderboard(
+          walletAddress.toLowerCase(),
+          result.donation.points,
+          result.donation.usdValue
+        );
+
+        if (leaderboardUpdated) {
+          console.log('[Context] Leaderboard updated successfully after verification');
+        } else {
+          console.error('[Context] Failed to update leaderboard after verification');
+        }
+
         console.log('[Context] Verification successful, reloading data.');
         await loadUserData(); // Reload user stats
         await loadLeaderboard(); // Force leaderboard refresh
@@ -204,6 +271,8 @@ export const DonationProvider = ({ children }) => {
         verifyDonation, // Manual verification
         getUserRank,    // Get current user's rank
         refreshLeaderboard: loadLeaderboard, // Expose manual refresh
+        loadLeaderboard, // Expose loadLeaderboard directly
+        loadUserData,    // Expose loadUserData directly
         clearDatabase // Expose database clearing function
       }}
     >

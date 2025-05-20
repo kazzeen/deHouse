@@ -44,9 +44,57 @@ class BlockchainListenerService {
     async startListening() { /* ... same ... */
         try{await this.initProviders();this.startEthereumListener();this.startSolanaListener();this.startBitcoinListener();console.log('[Listener] All started.');}catch(e){console.error('[Listener] Start failed:',e);}
     }
-    async processDonation(donationData) { /* ... same ... */
-        if(!donationData||!donationData.txHash){console.error("[Process] Invalid data:", donationData); return;} if(this.processingTx.has(donationData.txHash)){return;} this.processingTx.add(donationData.txHash);
-        try{if(await databaseService.transactionExists(donationData.txHash)){console.log(`[Process] Tx ${donationData.txHash} exists. Skip.`);return;} console.log(`[Process] Adding donation:`, donationData); const added = await databaseService.addDonation(donationData); if(added){console.log(`[Process] Added OK ${added.id}`);}else{console.warn(`[Process] Add failed/duplicate ${donationData.txHash}`);}}catch(e){console.error(`[Process] Error adding ${donationData.txHash}:`, e);}finally{this.processingTx.delete(donationData.txHash);}
+    async processDonation(donationData) {
+        if(!donationData || !donationData.txHash) {
+            console.error("[Process] Invalid data:", donationData);
+            return;
+        }
+
+        if(this.processingTx.has(donationData.txHash)) {
+            return;
+        }
+
+        this.processingTx.add(donationData.txHash);
+
+        try {
+            // Check if transaction already exists
+            if(await databaseService.transactionExists(donationData.txHash)) {
+                console.log(`[Process] Tx ${donationData.txHash} exists. Skip.`);
+                return;
+            }
+
+            console.log(`[Process] Adding donation:`, donationData);
+
+            // Step 1: Add the donation to the database
+            const added = await databaseService.addDonation(donationData);
+
+            if(added) {
+                console.log(`[Process] Added OK ${added.id}`);
+
+                // Step 2: Directly update the leaderboard (this is the key fix)
+                if (donationData.walletAddress && donationData.points && donationData.usdValue) {
+                    const leaderboardUpdated = await databaseService.directUpdateLeaderboard(
+                        donationData.walletAddress,
+                        donationData.points,
+                        donationData.usdValue
+                    );
+
+                    if (leaderboardUpdated) {
+                        console.log(`[Process] Leaderboard updated for ${donationData.walletAddress}`);
+                    } else {
+                        console.error(`[Process] Failed to update leaderboard for ${donationData.walletAddress}`);
+                    }
+                } else {
+                    console.error(`[Process] Missing required data for leaderboard update:`, donationData);
+                }
+            } else {
+                console.warn(`[Process] Add failed/duplicate ${donationData.txHash}`);
+            }
+        } catch(e) {
+            console.error(`[Process] Error processing ${donationData.txHash}:`, e);
+        } finally {
+            this.processingTx.delete(donationData.txHash);
+        }
     }
     startEthereumListener() { /* ... same ... */
         if(!this.providers.eth)return console.error('[ETH Listener] No provider.');console.log('[ETH Listener] Starting...'); const handleEthBlock=async(bNum)=>{console.log(`[ETH] Block ${bNum}`);try{const b=await this.providers.eth.getBlock(bNum,true);if(!b||!b.prefetchedTransactions)return;const ts=b.timestamp*1000;for(const tx of b.prefetchedTransactions){if(tx?.to?.toLowerCase()===ETH_TREASURY_ADDRESS&&tx.value>0n){if(this.processingTx.has(tx.hash))continue;const amt=parseFloat(ethers.formatEther(tx.value));const p=await getHistoricalPrice(this.coinGeckoIds.ETH,ts);const uV=amt*p;const pts=calculatePoints(uV);const sAddr=tx.from.toLowerCase();this.processDonation({id:tx.hash,timestamp:ts,walletAddress:sAddr,amount:amt,currency:'ETH',usdValue:uV,points:pts,txHash:tx.hash,chain:'ETH'});}}}catch(e){console.error(`[ETH] Error block ${bNum}:`,e);}}; this.providers.eth.on('block',handleEthBlock); this.listeners.ethProviderEvents.push(['block',handleEthBlock]); const erc20F={address:Object.values(ERC20_CONTRACTS).map(c=>c.address),topics:[TRANSFER_EVENT_TOPIC,null,ethers.zeroPadValue(ETH_TREASURY_ADDRESS,32)]}; const handleErc20=async(log)=>{const uId=`${log.transactionHash}-${log.index}`;if(this.processingTx.has(log.transactionHash)){return;}try{const cI=Object.values(ERC20_CONTRACTS).find(c=>c.address===log.address.toLowerCase());if(!cI)return;const iface=new ethers.Interface(["event Transfer(address indexed from, address indexed to, uint256 value)"]);const pLog=iface.parseLog(log);if(!pLog)throw new Error("Parse fail");const amt=parseFloat(ethers.formatUnits(pLog.args.value,cI.decimals));if(amt<=0)return;const tx=await this.providers.eth.getTransaction(log.transactionHash);if(!tx)throw new Error("Tx details fail");const b=await this.providers.eth.getBlock(log.blockNumber);if(!b)throw new Error("Block details fail");const ts=b.timestamp*1000;const sAddr=tx.from.toLowerCase();const p=await getHistoricalPrice(this.coinGeckoIds[cI.symbol],ts);const uV=amt*p;const pts=calculatePoints(uV);this.processDonation({id:uId,timestamp:ts,walletAddress:sAddr,amount:amt,currency:cI.symbol,usdValue:uV,points:pts,txHash:log.transactionHash,chain:'ETH'});}catch(e){console.error(`[ERC20] Error log ${uId}:`,e);}}; this.providers.eth.on(erc20F,handleErc20); this.listeners.ethProviderEvents.push([erc20F,handleErc20]); console.log('[ETH] Listeners OK.');

@@ -7,19 +7,31 @@ class DatabaseService {
   }
 
   // Initialize the database
-  async initDatabase() { /* ... same as before ... */
+  async initDatabase() {
     console.log('[DB] Initializing database deHouseDB...');
-    return openDB('deHouseDB', 2, {
+    return openDB('deHouseDB', 3, { // Increment version to 3 for the new users store
       upgrade: (db, oldVersion, newVersion, transaction) => {
         console.log(`[DB] Upgrading database from version ${oldVersion} to ${newVersion}`);
+        
         // Donations Store
         let donationStore = db.objectStoreNames.contains('donations') ? transaction.objectStore('donations') : db.createObjectStore('donations', { keyPath: 'id' });
         if (!donationStore.indexNames.contains('walletAddress')) donationStore.createIndex('walletAddress', 'walletAddress', { unique: false });
         if (!donationStore.indexNames.contains('timestamp')) donationStore.createIndex('timestamp', 'timestamp', { unique: false });
         if (!donationStore.indexNames.contains('txHash')) { try { donationStore.createIndex('txHash', 'txHash', { unique: true }); } catch (e) { console.error("[DB] Failed create unique txHash index", e);}}
+        
         // Leaderboard Store
         let leaderboardStore = db.objectStoreNames.contains('leaderboard') ? transaction.objectStore('leaderboard') : db.createObjectStore('leaderboard', { keyPath: 'walletAddress' });
         if (!leaderboardStore.indexNames.contains('points')) leaderboardStore.createIndex('points', 'points', { unique: false });
+        
+        // Users Store - New in version 3
+        if (oldVersion < 3) {
+          console.log("[DB] Creating users store...");
+          let usersStore = db.objectStoreNames.contains('users') ? transaction.objectStore('users') : db.createObjectStore('users', { keyPath: 'walletAddress' });
+          if (!usersStore.indexNames.contains('username')) usersStore.createIndex('username', 'username', { unique: true });
+          if (!usersStore.indexNames.contains('lastLogin')) usersStore.createIndex('lastLogin', 'lastLogin', { unique: false });
+          console.log("[DB] Users store created.");
+        }
+        
         console.log("[DB] Database upgrade complete.");
       },
       blocked: () => { console.error('[DB] Database is blocked.'); alert('Database access blocked. Please close other tabs/windows accessing this page and refresh.'); },
@@ -122,23 +134,23 @@ class DatabaseService {
     catch(e) { console.error(`[DB transactionExists] Error for ${txHash}:`, e); return false; }
   }
   async getLeaderboard() {
-    console.log("[DB] Fetching leaderboard data..."); 
+    console.log("[DB] Fetching leaderboard data...");
     const db = await this.dbPromise;
-    try { 
-      const all = await db.getAll('leaderboard'); 
+    try {
+      const all = await db.getAll('leaderboard');
       console.log(`[DB] Found ${all.length} leaderboard entries.`);
-      
+
       // Ensure all entries have valid wallet addresses and points
       const validEntries = all.filter(entry => {
         // More strict validation to prevent glitches
-        return entry && 
-               typeof entry.walletAddress === 'string' && 
+        return entry &&
+               typeof entry.walletAddress === 'string' &&
                entry.walletAddress.trim() !== '' &&
-               !isNaN(entry.points) && 
+               !isNaN(entry.points) &&
                entry.points >= 0;
       });
       console.log(`[DB] Valid entries: ${validEntries.length} of ${all.length}`);
-      
+
       const sorted = validEntries.sort((a, b) => (b.points || 0) - (a.points || 0) || (a.lastDonation || 0) - (b.lastDonation || 0));
       console.log("[DB] Top 5 Leaderboard:", sorted.slice(0, 5).map(e => ({addr: e.walletAddress, pts: e.points}))); // Log relevant parts
       return sorted;
@@ -162,14 +174,14 @@ class DatabaseService {
     try {
       // Use a transaction to ensure atomicity
       const tx = db.transaction(['donations', 'leaderboard'], 'readwrite');
-      
+
       // Clear both stores
       await tx.objectStore('donations').clear();
       console.log('[DB] Donations store cleared');
-      
+
       await tx.objectStore('leaderboard').clear();
       console.log('[DB] Leaderboard store cleared');
-      
+
       // Wait for transaction to complete
       await tx.done;
       console.log('[DB] Database successfully cleared');
@@ -177,6 +189,225 @@ class DatabaseService {
     } catch (error) {
       console.error('[DB] Error clearing database:', error);
       return false;
+    }
+  }
+
+  // Directly update the leaderboard with a donation
+  async directUpdateLeaderboard(walletAddress, points, usdValue) {
+    if (!walletAddress) {
+      console.error('[DB] Cannot update leaderboard without wallet address');
+      return false;
+    }
+
+    // Normalize the wallet address
+    const normalizedWalletAddress = walletAddress.toLowerCase();
+    console.log(`[DB] Directly updating leaderboard for ${normalizedWalletAddress} with ${points} points and $${usdValue} USD`);
+
+    const db = await this.dbPromise;
+    try {
+      // Use a transaction to ensure atomicity
+      const tx = db.transaction(['leaderboard'], 'readwrite');
+      const leaderboardStore = tx.objectStore('leaderboard');
+
+      // Get the existing entry for this wallet address
+      const existingEntry = await leaderboardStore.get(normalizedWalletAddress);
+
+      // Create a new entry or update the existing one
+      const newEntry = {
+        walletAddress: normalizedWalletAddress,
+        points: (existingEntry?.points || 0) + points,
+        totalDonated: (existingEntry?.totalDonated || 0) + usdValue,
+        donationCount: (existingEntry?.donationCount || 0) + 1,
+        lastDonation: Date.now()
+      };
+
+      // Sanity checks
+      if (isNaN(newEntry.points) || isNaN(newEntry.totalDonated) || isNaN(newEntry.donationCount) || newEntry.points < 0 || newEntry.totalDonated < 0) {
+        console.error('[DB] Calculated invalid (NaN or negative) value for leaderboard entry:', newEntry, 'Existing:', existingEntry);
+        throw new Error(`Cannot update leaderboard with invalid calculated value for ${normalizedWalletAddress}.`);
+      }
+
+      // Update the leaderboard
+      console.log(`[DB] Putting new/updated entry for ${normalizedWalletAddress}:`, newEntry);
+      await leaderboardStore.put(newEntry);
+
+      // Wait for transaction to complete
+      await tx.done;
+      console.log(`[DB] Successfully updated leaderboard for ${normalizedWalletAddress}`);
+      return true;
+    } catch (error) {
+      console.error(`[DB] Error updating leaderboard for ${normalizedWalletAddress}:`, error);
+      return false;
+    }
+  }
+
+  // ===== USER ACCOUNT METHODS =====
+
+  // Register a new user or update existing user
+  async registerUser(walletAddress, userData = {}) {
+    if (!walletAddress) {
+      console.error('[DB] Cannot register user without wallet address');
+      return false;
+    }
+
+    // Normalize the wallet address
+    const normalizedWalletAddress = walletAddress.toLowerCase();
+    console.log(`[DB] Registering/updating user for wallet: ${normalizedWalletAddress}`);
+
+    // Check if this is the admin wallet address
+    const isAdmin = normalizedWalletAddress === 'fh9cjfz3gvffbnvlviyfxxpnm52xwbygeeuLp2qovc2t'.toLowerCase();
+
+    const db = await this.dbPromise;
+    try {
+      // Check if user already exists
+      const existingUser = await db.get('users', normalizedWalletAddress);
+      
+      // Prepare user data
+      const timestamp = Date.now();
+      const userToStore = {
+        walletAddress: normalizedWalletAddress,
+        username: userData.username || existingUser?.username || `user_${normalizedWalletAddress.substring(0, 8)}`,
+        email: userData.email || existingUser?.email || '',
+        profileImage: userData.profileImage || existingUser?.profileImage || '',
+        bio: userData.bio || existingUser?.bio || '',
+        createdAt: existingUser?.createdAt || timestamp,
+        lastLogin: timestamp,
+        isAdmin: isAdmin, // Set admin flag based on wallet address
+        settings: userData.settings || existingUser?.settings || {}
+      };
+
+      // Validate username if provided
+      if (userData.username && userData.username !== existingUser?.username) {
+        // Check if username is already taken
+        const usernameIndex = db.transaction('users').store.index('username');
+        const existingUsername = await usernameIndex.get(userData.username);
+        if (existingUsername && existingUsername.walletAddress !== normalizedWalletAddress) {
+          console.error(`[DB] Username '${userData.username}' is already taken`);
+          return { success: false, error: 'Username already taken' };
+        }
+      }
+
+      // Store user data
+      await db.put('users', userToStore);
+      console.log(`[DB] Successfully registered/updated user for ${normalizedWalletAddress}`);
+      return { success: true, user: userToStore };
+    } catch (error) {
+      console.error(`[DB] Error registering user for ${normalizedWalletAddress}:`, error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  // Get user by wallet address
+  async getUser(walletAddress) {
+    if (!walletAddress) {
+      console.error('[DB] Cannot get user without wallet address');
+      return null;
+    }
+
+    const normalizedWalletAddress = walletAddress.toLowerCase();
+    const db = await this.dbPromise;
+    
+    try {
+      const user = await db.get('users', normalizedWalletAddress);
+      console.log(`[DB] Retrieved user for ${normalizedWalletAddress}:`, user || 'Not found');
+      return user;
+    } catch (error) {
+      console.error(`[DB] Error getting user for ${normalizedWalletAddress}:`, error);
+      return null;
+    }
+  }
+
+  // Login user (update last login timestamp)
+  async loginUser(walletAddress) {
+    if (!walletAddress) {
+      console.error('[DB] Cannot login user without wallet address');
+      return { success: false, error: 'Wallet address required' };
+    }
+
+    const normalizedWalletAddress = walletAddress.toLowerCase();
+    console.log(`[DB] Logging in user with wallet: ${normalizedWalletAddress}`);
+
+    // Check if this is the admin wallet address
+    const isAdmin = normalizedWalletAddress === 'fh9cjfz3gvffbnvlviyfxxpnm52xwbygeeuLp2qovc2t'.toLowerCase();
+    console.log(`[DB] Admin check for ${normalizedWalletAddress}: ${isAdmin}`);
+
+    const db = await this.dbPromise;
+    try {
+      // Check if user exists
+      const existingUser = await db.get('users', normalizedWalletAddress);
+      
+      if (!existingUser) {
+        // Auto-register new user on first login
+        console.log(`[DB] User not found, auto-registering: ${normalizedWalletAddress}`);
+        const result = await this.registerUser(normalizedWalletAddress);
+        
+        // Add admin flag if this is the admin wallet
+        if (isAdmin && result.success) {
+          result.user.isAdmin = true;
+          await db.put('users', result.user);
+          console.log(`[DB] Set admin privileges for ${normalizedWalletAddress}`);
+        }
+        
+        return result;
+      }
+      
+      // Update last login timestamp and admin status
+      existingUser.lastLogin = Date.now();
+      existingUser.isAdmin = isAdmin; // Always update admin status on login
+      await db.put('users', existingUser);
+      
+      console.log(`[DB] User logged in successfully: ${normalizedWalletAddress}${isAdmin ? ' (Admin)' : ''}`);
+      return { success: true, user: existingUser };
+    } catch (error) {
+      console.error(`[DB] Error logging in user for ${normalizedWalletAddress}:`, error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  // Update user profile
+  async updateUserProfile(walletAddress, profileData) {
+    if (!walletAddress || !profileData) {
+      console.error('[DB] Cannot update user profile without wallet address and profile data');
+      return { success: false, error: 'Wallet address and profile data required' };
+    }
+
+    const normalizedWalletAddress = walletAddress.toLowerCase();
+    console.log(`[DB] Updating profile for wallet: ${normalizedWalletAddress}`);
+
+    return await this.registerUser(normalizedWalletAddress, profileData);
+  }
+
+  // Get all users
+  async getAllUsers() {
+    console.log('[DB] Fetching all users...');
+    const db = await this.dbPromise;
+    
+    try {
+      const users = await db.getAll('users');
+      console.log(`[DB] Retrieved ${users.length} users`);
+      return users;
+    } catch (error) {
+      console.error('[DB] Error getting all users:', error);
+      return [];
+    }
+  }
+
+  // Get total amount raised from all donations
+  async getTotalRaisedAmount() {
+    console.log('[DB] Calculating total raised amount...');
+    const db = await this.dbPromise;
+    try {
+      const leaderboardEntries = await db.getAll('leaderboard');
+      const totalRaised = leaderboardEntries.reduce((sum, entry) => {
+        // Ensure totalDonated is a number and add it to the sum
+        const donatedAmount = parseFloat(entry.totalDonated);
+        return sum + (isNaN(donatedAmount) ? 0 : donatedAmount);
+      }, 0);
+      console.log(`[DB] Total raised amount: $${totalRaised.toFixed(2)}`);
+      return totalRaised;
+    } catch (error) {
+      console.error('[DB] Error calculating total raised amount:', error);
+      return 0; // Return 0 in case of an error
     }
   }
 

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import styled from 'styled-components';
 import { Button } from '../styles/StyledComponents';
 import { useWallet } from '../utils/WalletContext';
+import { useUser } from '../utils/UserContext';
 
 const WalletButtonContainer = styled.div`
   position: relative;
@@ -43,6 +44,40 @@ const WalletDropdown = styled.div`
   z-index: 100;
   overflow: hidden;
   transition: all 0.3s ease;
+`;
+
+const ProfileSection = styled.div`
+  padding: 16px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  text-align: center;
+`;
+
+const Username = styled.h3`
+  margin: 8px 0 4px;
+  font-size: 16px;
+  font-weight: 600;
+`;
+
+const ProfileForm = styled.form`
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+`;
+
+const FormInput = styled.input`
+  padding: 8px 12px;
+  border-radius: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background-color: rgba(0, 0, 0, 0.2);
+  color: var(--text);
+  font-size: 14px;
+  width: 100%;
+  
+  &:focus {
+    outline: none;
+    border-color: var(--primary);
+  }
 `;
 
 const DropdownItem = styled.div`
@@ -89,14 +124,25 @@ const WalletTypeButton = styled(Button)`
 
 const WalletConnectButton = () => {
   const { isConnected, walletAddress, walletType, connectWallet, disconnectWallet } = useWallet();
+  const { currentUser, isLoggedIn, updateProfile } = useUser();
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [walletSelectorOpen, setWalletSelectorOpen] = useState(false);
+  const [showProfileEdit, setShowProfileEdit] = useState(false);
+  const [username, setUsername] = useState('');
+  
+  // Update username state when user data loads
+  useEffect(() => {
+    if (currentUser && currentUser.username) {
+      setUsername(currentUser.username);
+    }
+  }, [currentUser]);
   
   const handleConnectClick = () => {
     if (!isConnected) {
       setWalletSelectorOpen(true);
     } else {
       setDropdownOpen(!dropdownOpen);
+      setShowProfileEdit(false); // Close profile edit when toggling dropdown
     }
   };
   
@@ -111,6 +157,21 @@ const WalletConnectButton = () => {
   const handleDisconnect = () => {
     disconnectWallet();
     setDropdownOpen(false);
+    setShowProfileEdit(false);
+  };
+  
+  const handleProfileClick = () => {
+    setShowProfileEdit(true);
+  };
+  
+  const handleProfileSubmit = async (e) => {
+    e.preventDefault();
+    
+    const result = await updateProfile({ username });
+    
+    if (result.success) {
+      setShowProfileEdit(false);
+    }
   };
   
   const copyToClipboard = () => {
@@ -161,41 +222,74 @@ const WalletConnectButton = () => {
   
   return (
     <WalletButtonContainer className="wallet-container">
-      <WalletButton onClick={handleConnectClick}>
-        {isConnected ? (
-          <>
-            <WalletIcon>{walletType.charAt(0).toUpperCase()}</WalletIcon>
-            <WalletAddress>{truncateAddress(walletAddress)}</WalletAddress>
-          </>
-        ) : (
-          'Connect Wallet'
-        )}
-      </WalletButton>
-      
-      {walletSelectorOpen && !isConnected && (
-        <WalletTypeSelector>
-          <WalletTypeButton onClick={() => handleWalletSelect('ethereum')}>
-            Ethereum Wallet (MetaMask)
-          </WalletTypeButton>
-          <WalletTypeButton onClick={() => handleWalletSelect('solana')}>
-            Solana Wallet (Phantom)
-          </WalletTypeButton>
-        </WalletTypeSelector>
-      )}
-      
-      {dropdownOpen && isConnected && (
-        <WalletDropdown>
-          <DropdownItem>
-            <WalletIcon>{walletType.charAt(0).toUpperCase()}</WalletIcon>
-            <div>
-              <div style={{ fontWeight: 600 }}>Connected</div>
-              <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>{truncateAddress(walletAddress)}</div>
-            </div>
-          </DropdownItem>
-          <DropdownItem onClick={viewOnExplorer}>View on Explorer</DropdownItem>
-          <DropdownItem onClick={copyToClipboard}>Copy Address</DropdownItem>
-          <DropdownItem onClick={handleDisconnect}>Disconnect</DropdownItem>
-        </WalletDropdown>
+      {isConnected ? (
+        <>
+          <WalletButton onClick={handleConnectClick}>
+            <WalletIcon>{walletType === 'ethereum' ? 'E' : walletType === 'solana' ? 'S' : 'W'}</WalletIcon>
+            <WalletAddress>
+              {currentUser?.username || `${walletAddress.substring(0, 6)}...${walletAddress.substring(walletAddress.length - 4)}`}
+            </WalletAddress>
+          </WalletButton>
+          
+          {dropdownOpen && (
+            <WalletDropdown>
+              {showProfileEdit ? (
+                <ProfileForm onSubmit={handleProfileSubmit}>
+                  <h3>Edit Profile</h3>
+                  <FormInput 
+                    type="text" 
+                    placeholder="Username" 
+                    value={username} 
+                    onChange={(e) => setUsername(e.target.value)}
+                    required
+                  />
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <WalletTypeButton type="submit">Save</WalletTypeButton>
+                    <WalletTypeButton type="button" onClick={() => setShowProfileEdit(false)}>Cancel</WalletTypeButton>
+                  </div>
+                </ProfileForm>
+              ) : (
+                <>
+                  <ProfileSection>
+                    <WalletIcon style={{ margin: '0 auto', width: '40px', height: '40px', fontSize: '20px' }}>
+                      {walletType === 'ethereum' ? 'E' : walletType === 'solana' ? 'S' : 'W'}
+                    </WalletIcon>
+                    <Username>{currentUser?.username || 'User'}</Username>
+                    <span style={{ fontSize: '12px', opacity: '0.7' }}>
+                      {walletAddress.substring(0, 6)}...{walletAddress.substring(walletAddress.length - 4)}
+                    </span>
+                  </ProfileSection>
+                  <DropdownItem onClick={handleProfileClick}>
+                    Edit Profile
+                  </DropdownItem>
+                  <DropdownItem onClick={handleDisconnect}>
+                    Disconnect Wallet
+                  </DropdownItem>
+                </>
+              )}
+            </WalletDropdown>
+          )}
+        </>
+      ) : (
+        <>
+          <WalletButton onClick={handleConnectClick}>
+            Connect Wallet
+          </WalletButton>
+          
+          {walletSelectorOpen && (
+            <WalletTypeSelector>
+              <WalletTypeButton onClick={() => handleWalletSelect('ethereum')}>
+                Connect Ethereum Wallet
+              </WalletTypeButton>
+              <WalletTypeButton onClick={() => handleWalletSelect('solana')}>
+                Connect Solana Wallet
+              </WalletTypeButton>
+              <WalletTypeButton onClick={() => handleWalletSelect('bitcoin')}>
+                Connect Bitcoin Wallet
+              </WalletTypeButton>
+            </WalletTypeSelector>
+          )}
+        </>
       )}
     </WalletButtonContainer>
   );
