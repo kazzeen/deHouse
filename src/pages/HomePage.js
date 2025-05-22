@@ -1,9 +1,9 @@
-import React, { useState } from 'react';
+import React from 'react';
 import styled from 'styled-components';
 import { Container, Section, Heading, Text, Button, Flex, Card, Grid } from '../styles/StyledComponents';
 import WalletConnectButton from '../components/WalletConnectButton';
 import TreasuryBalanceCounter from '../components/TreasuryBalanceCounter';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 
 // Import crypto icons
 import btcIcon from '../assets/btc.svg';
@@ -12,13 +12,14 @@ import solIcon from '../assets/sol.svg';
 import usdcIcon from '../assets/usdc.svg';
 
 const HeroSection = styled(Section)`
-  min-height: 80vh;
+  min-height: 90vh;
   display: flex;
   align-items: center;
-  background: linear-gradient(135deg, rgba(15, 22, 36, 0.95) 0%, rgba(26, 35, 50, 0.95) 100%);
+  background: linear-gradient(135deg, rgba(15, 22, 36, 0.5) 0%, rgba(26, 35, 50, 0.5) 100%);
   background-size: cover;
   position: relative;
   overflow: hidden;
+  padding: 100px 0;
 
   &::before {
     content: '';
@@ -32,42 +33,43 @@ const HeroSection = styled(Section)`
 `;
 
 const HeroContent = styled.div`
-  max-width: 650px;
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
   position: relative;
   z-index: 2;
+
+  @media (max-width: 992px) {
+    flex-direction: column;
+    align-items: center;
+  }
+`;
+
+const HeroLeftColumn = styled.div`
+  max-width: 550px;
+
+  @media (max-width: 992px) {
+    max-width: 100%;
+    margin-bottom: 40px;
+    text-align: center;
+  }
+`;
+
+const HeroRightColumn = styled.div`
+  width: 400px;
+
+  @media (max-width: 992px) {
+    width: 100%;
+    max-width: 450px;
+  }
 `;
 
 const HeroButtons = styled(Flex)`
   margin-top: 40px;
-`;
 
-const StatsContainer = styled(Flex)`
-  margin-top: 80px;
-  background: rgba(26, 35, 50, 0.7);
-  backdrop-filter: blur(10px);
-  border-radius: 16px;
-  padding: 24px;
-  border: 1px solid rgba(255, 255, 255, 0.05);
-`;
-
-const StatItem = styled.div`
-  text-align: center;
-  padding: 0 24px;
-
-  &:not(:last-child) {
-    border-right: 1px solid rgba(255, 255, 255, 0.1);
-  }
-
-  h3 {
-    font-size: 36px;
-    font-weight: 700;
-    color: var(--primary);
-    margin-bottom: 8px;
-  }
-
-  p {
-    font-size: 16px;
-    color: var(--text-secondary);
+  @media (max-width: 992px) {
+    justify-content: center;
   }
 `;
 
@@ -87,8 +89,39 @@ const FeatureCard = styled(Card)`
   }
 `;
 
+const GoalsSection = styled(Section)`
+  background: linear-gradient(135deg, rgba(15, 22, 36, 0.4) 0%, rgba(26, 35, 50, 0.4) 100%);
+  padding: 80px 0;
+
+  @media (max-width: 768px) {
+    padding: 60px 0;
+  }
+`;
+
+const GoalCard = styled(Card)`
+  padding: 32px;
+  text-align: center;
+  max-width: 800px;
+  margin: 0 auto;
+  background: rgba(26, 35, 50, 0.5);
+  backdrop-filter: blur(15px);
+  -webkit-backdrop-filter: blur(15px);
+  border: 1px solid rgba(108, 92, 231, 0.2);
+
+  &::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: radial-gradient(circle at center, rgba(108, 92, 231, 0.15) 0%, transparent 70%);
+    z-index: 0;
+  }
+`;
+
 const CryptoSection = styled(Section)`
-  background-color: rgba(26, 35, 50, 0.5);
+  background-color: rgba(25, 32, 44, 0.06);
 `;
 
 const CryptoCard = styled(Card)`
@@ -105,19 +138,7 @@ const CryptoCard = styled(Card)`
   }
 `;
 
-const HeroLayout = styled.div`
-  display: grid;
-  grid-template-columns: 1fr 350px;
-  gap: 40px;
-  align-items: center;
-
-  @media (max-width: 1024px) {
-    grid-template-columns: 1fr;
-  }
-`;
-
 const HomePage = () => {
-  const [activeTab, setActiveTab] = useState('all');
   const navigate = useNavigate();
 
   const cryptoData = [
@@ -131,8 +152,8 @@ const HomePage = () => {
     <>
       <HeroSection>
         <Container>
-          <HeroLayout>
-            <HeroContent>
+          <HeroContent>
+            <HeroLeftColumn>
               <Heading level={1}>Support Our DAO Treasury with Crypto Donations</Heading>
               <Text size="20px">
                 Join our community by donating cryptocurrency to the deHouse DAO treasury.
@@ -143,26 +164,12 @@ const HomePage = () => {
                 <WalletConnectButton />
                 <Button secondary onClick={() => navigate('/leaderboard')}>View Leaderboard</Button>
               </HeroButtons>
+            </HeroLeftColumn>
 
-              <StatsContainer justify="space-between">
-                <StatItem>
-                  <h3>$5K+</h3>
-                  <p>Total Donations</p>
-                </StatItem>
-                <StatItem>
-                  <h3>10+</h3>
-                  <p>Contributors</p>
-                </StatItem>
-                <StatItem>
-                  <h3>3</h3>
-                  <p>Supported Chains</p>
-                </StatItem>
-              </StatsContainer>
-            </HeroContent>
-
-            {/* Treasury Balance Counter */}
-            <TreasuryBalanceCounter />
-          </HeroLayout>
+            <HeroRightColumn>
+              <TreasuryBalanceCounter />
+            </HeroRightColumn>
+          </HeroContent>
         </Container>
       </HeroSection>
 
@@ -206,6 +213,23 @@ const HomePage = () => {
           </Grid>
         </Container>
       </FeaturesSection>
+
+      <GoalsSection>
+        <Container>
+          <Heading level={2} style={{ textAlign: 'center', marginBottom: '32px' }}>Our Mission</Heading>
+          <GoalCard>
+            <div style={{ marginBottom: '24px', opacity: '0.8' }}>
+              <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" fill="none" viewBox="0 0 24 24" stroke="currentColor" style={{ color: 'var(--primary)' }}>
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+              </svg>
+            </div>
+            <Text size="20px" style={{ lineHeight: '1.6', position: 'relative', zIndex: '1' }}>
+              "Our mission is to strategically build and manage a diverse portfolio of assets, properties and products, harnessing the collective strength of our DAO to create exceptional value and meaningful rewards for all our contributors.
+We are dedicated to uniting our community’s resources together to acquire and grow our treasury's assets, ensuring that the prosperity generated by our DAO benefits each and every one of our members."
+            </Text>
+          </GoalCard>
+        </Container>
+      </GoalsSection>
 
       <CryptoSection>
         <Container>

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import styled from 'styled-components';
+import styled, { keyframes } from 'styled-components';
 import { Card, Heading, Text, Flex, Button } from '../styles/StyledComponents';
 import treasuryBalanceService from '../utils/TreasuryBalanceService';
 
@@ -8,13 +8,30 @@ import btcIcon from '../assets/btc.svg';
 import ethIcon from '../assets/eth.svg';
 import solIcon from '../assets/sol.svg';
 
+// Skeleton loading animation
+const shimmer = keyframes`
+  0% {
+    background-position: -200px 0;
+  }
+  100% {
+    background-position: 200px 0;
+  }
+`;
+
 const CounterCard = styled(Card)`
   position: relative;
   overflow: hidden;
   padding: 24px;
   margin-bottom: 24px;
-  background: linear-gradient(135deg, rgba(26, 35, 50, 0.9) 0%, rgba(15, 22, 36, 0.95) 100%);
-  border: 1px solid rgba(108, 92, 231, 0.2);
+  background: linear-gradient(135deg, rgba(26, 35, 50, 0.85) 0%, rgba(15, 22, 36, 0.9) 100%);
+  border: 1px solid rgba(108, 92, 231, 0.3);
+  backdrop-filter: blur(15px);
+  -webkit-backdrop-filter: blur(15px);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+  height: 100%;
+  min-height: 450px;
+  display: flex;
+  flex-direction: column;
 
   &::before {
     content: '';
@@ -23,44 +40,60 @@ const CounterCard = styled(Card)`
     left: 0;
     width: 100%;
     height: 100%;
-    background: radial-gradient(circle at 90% 10%, rgba(108, 92, 231, 0.15) 0%, transparent 70%);
+    background: radial-gradient(circle at 90% 10%, rgba(108, 92, 231, 0.25) 0%, transparent 70%);
     z-index: 0;
+  }
+
+  @media (max-width: 992px) {
+    margin-top: 20px;
   }
 `;
 
 const CounterContent = styled.div`
   position: relative;
   z-index: 1;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
 `;
 
 const TotalAmount = styled.div`
-  font-size: 36px;
-  font-weight: 700;
+  font-size: 42px;
+  font-weight: 800;
   margin: 16px 0;
   background: linear-gradient(90deg, var(--primary) 0%, var(--secondary) 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
+  text-shadow: 0 2px 10px rgba(108, 92, 231, 0.3);
+  letter-spacing: -0.5px;
 `;
 
 const RefreshButton = styled(Button)`
   padding: 8px 16px;
   font-size: 14px;
-  margin-top: 16px;
+  margin-top: auto;
+  align-self: flex-start;
 `;
 
 const CryptoBreakdown = styled.div`
   margin-top: 16px;
+  flex-grow: 1;
 `;
 
 const CryptoItem = styled(Flex)`
   margin-bottom: 12px;
   padding: 12px;
-  background-color: rgba(255, 255, 255, 0.05);
+  background-color: rgba(255, 255, 255, 0.1);
   border-radius: 8px;
   transition: all 0.3s ease;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.05);
 
   &:hover {
-    background-color: rgba(255, 255, 255, 0.1);
+    background-color: rgba(255, 255, 255, 0.15);
+    transform: translateY(-2px);
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
   }
 `;
 
@@ -85,18 +118,70 @@ const CryptoValue = styled.div`
   color: var(--primary);
 `;
 
+// Skeleton loading components
+const SkeletonBase = styled.div`
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.05) 25%, rgba(255, 255, 255, 0.1) 50%, rgba(255, 255, 255, 0.05) 75%);
+  background-size: 200px 100%;
+  animation: ${shimmer} 1.5s infinite linear;
+  border-radius: 4px;
+  height: ${props => props.height || '20px'};
+  width: ${props => props.width || '100%'};
+  margin-bottom: ${props => props.mb || '8px'};
+  opacity: ${props => props.isLoading ? '1' : '0'};
+  transition: opacity 0.3s ease;
+`;
+
+const SkeletonTitle = styled(SkeletonBase)`
+  height: 32px;
+  width: 70%;
+  margin-bottom: 24px;
+`;
+
+const SkeletonAmount = styled(SkeletonBase)`
+  height: 48px;
+  width: 60%;
+  margin-bottom: 16px;
+`;
+
+const SkeletonText = styled(SkeletonBase)`
+  height: 16px;
+  width: ${props => props.width || '80%'};
+`;
+
+const SkeletonCryptoItem = styled.div`
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px;
+  background-color: rgba(255, 255, 255, 0.05);
+  border-radius: 8px;
+  margin-bottom: 12px;
+`;
+
+const SkeletonIcon = styled(SkeletonBase)`
+  height: 24px;
+  width: 24px;
+  border-radius: 50%;
+  margin-right: 12px;
+`;
+
 const LoadingOverlay = styled.div`
   position: absolute;
   top: 0;
   left: 0;
   width: 100%;
   height: 100%;
-  background-color: rgba(15, 22, 36, 0.7);
+  background-color: rgba(15, 22, 36, 0.8);
   display: flex;
   justify-content: center;
   align-items: center;
   z-index: 2;
-  backdrop-filter: blur(2px);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border-radius: 16px;
+  opacity: ${props => props.initialLoad ? '1' : '0'};
+  pointer-events: ${props => props.initialLoad ? 'auto' : 'none'};
+  transition: opacity 0.3s ease;
 `;
 
 const LoadingSpinner = styled.div`
@@ -122,87 +207,112 @@ const TreasuryBalanceCounter = () => {
     lastUpdated: null
   });
 
+  // Loading states
   const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [initialLoad, setInitialLoad] = useState(true);
   const [error, setError] = useState(null);
   const [debugMode, setDebugMode] = useState(false);
 
-  const fetchBalances = async () => {
+  // Function to fetch balances with progressive loading
+  const fetchBalances = async (forceRefresh = false) => {
     console.log('%c[DEBUG-UI] Starting balance fetch...', 'background: #4b0082; color: #fff');
     console.log('%c[DEBUG-UI] Current timestamp:', 'background: #4b0082; color: #fff', new Date().toISOString());
-    setIsLoading(true);
+
+    // If this is a manual refresh, show the refreshing state
+    if (forceRefresh) {
+      setIsRefreshing(true);
+    } else {
+      setIsLoading(true);
+    }
+
     setError(null);
 
     try {
+      // First, try to get cached data immediately
+      const cachedData = treasuryBalanceService.getBalances();
+
+      // If we have cached data and this is the initial load, show it immediately
+      if (initialLoad && cachedData.lastUpdated) {
+        console.log('%c[DEBUG-UI] Using cached data for initial render', 'background: #4b0082; color: #fff');
+        setBalanceData(validateData(cachedData));
+        setInitialLoad(false);
+        setIsLoading(false);
+      }
+
+      // Then fetch fresh data (or use cache if it's still valid)
       console.log('%c[DEBUG-UI] Calling treasuryBalanceService.fetchAllBalances()', 'background: #4b0082; color: #fff');
       console.time('UI-Balance-Fetch');
-      const data = await treasuryBalanceService.fetchAllBalances();
+      const data = await treasuryBalanceService.fetchAllBalances(forceRefresh);
       console.timeEnd('UI-Balance-Fetch');
       console.log('%c[DEBUG-UI] Received data from service:', 'background: #4b0082; color: #fff', JSON.stringify(data));
 
-      // Validate the data before setting it
-      console.log('%c[DEBUG-UI] Validating data...', 'background: #4b0082; color: #fff');
-      if (!data || typeof data !== 'object') {
-        console.error('%c[DEBUG-UI] Invalid data format:', 'background: #f00; color: #fff', data);
-        throw new Error('Invalid data returned from service');
-      }
-
-      // Log raw data for debugging
-      console.log('%c[DEBUG-UI] Raw balances from service:', 'background: #4b0082; color: #fff', {
-        btc: data.balances?.btc,
-        eth: data.balances?.eth,
-        sol: data.balances?.sol
-      });
-
-      // Ensure all required properties exist
-      const validatedData = {
-        balances: {
-          btc: parseFloat(data.balances?.btc || 0),
-          eth: parseFloat(data.balances?.eth || 0),
-          sol: parseFloat(data.balances?.sol || 0)
-        },
-        prices: {
-          btc: parseFloat(data.prices?.btc || 0),
-          eth: parseFloat(data.prices?.eth || 0),
-          sol: parseFloat(data.prices?.sol || 0)
-        },
-        usdValues: {
-          btc: parseFloat(data.usdValues?.btc || 0),
-          eth: parseFloat(data.usdValues?.eth || 0),
-          sol: parseFloat(data.usdValues?.sol || 0)
-        },
-        totalUSD: parseFloat(data.totalUSD || 0),
-        lastUpdated: data.lastUpdated || new Date()
-      };
-
-      // Check for zero balances
-      if (validatedData.balances.eth === 0) {
-        console.warn('%c[DEBUG-UI] WARNING: ETH balance is zero!', 'background: #f00; color: #fff');
-      }
-
-      if (validatedData.balances.sol === 0) {
-        console.warn('%c[DEBUG-UI] WARNING: SOL balance is zero!', 'background: #f00; color: #fff');
-      }
-
-      // We're only showing actual balances from the blockchain
-      // No fallbacks or fake data
-
+      // Validate and set the data
+      const validatedData = validateData(data);
       console.log('Validated balance data:', validatedData);
       setBalanceData(validatedData);
     } catch (err) {
       console.error('Error fetching treasury balances:', err);
       setError('Failed to fetch current balances. Please try again later.');
-
-      // Set all balances to 0 - only show actual balances
-      setBalanceData({
-        balances: { btc: 0, eth: 0, sol: 0 },
-        prices: { btc: 0, eth: 0, sol: 0 },
-        usdValues: { btc: 0, eth: 0, sol: 0 },
-        totalUSD: 0,
-        lastUpdated: new Date()
-      });
     } finally {
       setIsLoading(false);
+      setIsRefreshing(false);
+      setInitialLoad(false);
     }
+  };
+
+  // Helper function to validate data
+  const validateData = (data) => {
+    console.log('%c[DEBUG-UI] Validating data...', 'background: #4b0082; color: #fff');
+
+    if (!data || typeof data !== 'object') {
+      console.error('%c[DEBUG-UI] Invalid data format:', 'background: #f00; color: #fff', data);
+      throw new Error('Invalid data returned from service');
+    }
+
+    // Log raw data for debugging
+    console.log('%c[DEBUG-UI] Raw balances from service:', 'background: #4b0082; color: #fff', {
+      btc: data.balances?.btc,
+      eth: data.balances?.eth,
+      sol: data.balances?.sol
+    });
+
+    // Ensure all required properties exist
+    const validatedData = {
+      balances: {
+        btc: parseFloat(data.balances?.btc || 0),
+        eth: parseFloat(data.balances?.eth || 0),
+        sol: parseFloat(data.balances?.sol || 0)
+      },
+      prices: {
+        btc: parseFloat(data.prices?.btc || 0),
+        eth: parseFloat(data.prices?.eth || 0),
+        sol: parseFloat(data.prices?.sol || 0)
+      },
+      usdValues: {
+        btc: parseFloat(data.usdValues?.btc || 0),
+        eth: parseFloat(data.usdValues?.eth || 0),
+        sol: parseFloat(data.usdValues?.sol || 0)
+      },
+      totalUSD: parseFloat(data.totalUSD || 0),
+      lastUpdated: data.lastUpdated || new Date()
+    };
+
+    // Check for zero balances
+    if (validatedData.balances.eth === 0) {
+      console.warn('%c[DEBUG-UI] WARNING: ETH balance is zero!', 'background: #f00; color: #fff');
+    }
+
+    if (validatedData.balances.sol === 0) {
+      console.warn('%c[DEBUG-UI] WARNING: SOL balance is zero!', 'background: #f00; color: #fff');
+    }
+
+    return validatedData;
+  };
+
+  // Handle manual refresh
+  const handleRefresh = () => {
+    fetchBalances(true); // Force refresh
   };
 
   // Toggle debug mode with Ctrl+Shift+D
@@ -217,11 +327,12 @@ const TreasuryBalanceCounter = () => {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
+  // Initial fetch and interval setup
   useEffect(() => {
     fetchBalances();
 
     // Set up interval to refresh balances every 5 minutes
-    const intervalId = setInterval(fetchBalances, 5 * 60 * 1000);
+    const intervalId = setInterval(() => fetchBalances(true), 5 * 60 * 1000);
 
     // Clean up interval on component unmount
     return () => clearInterval(intervalId);
@@ -249,24 +360,33 @@ const TreasuryBalanceCounter = () => {
 
   return (
     <CounterCard>
-      {isLoading && (
-        <LoadingOverlay>
-          <LoadingSpinner />
-        </LoadingOverlay>
-      )}
+      {/* Only show full overlay on initial load */}
+      <LoadingOverlay initialLoad={initialLoad}>
+        <LoadingSpinner />
+      </LoadingOverlay>
 
       <CounterContent>
         <Heading level={3}>Total Funds Raised</Heading>
 
-        <TotalAmount>
-          {formatCurrency(balanceData.totalUSD)}
-        </TotalAmount>
+        {/* Skeleton or actual amount */}
+        {isLoading && !balanceData.lastUpdated ? (
+          <SkeletonAmount isLoading={true} />
+        ) : (
+          <TotalAmount>
+            {formatCurrency(balanceData.totalUSD)}
+          </TotalAmount>
+        )}
 
-        <Text size="14px" mb="8px">
-          {balanceData.lastUpdated
-            ? `Last updated: ${balanceData.lastUpdated.toLocaleString()}`
-            : 'Fetching latest balances...'}
-        </Text>
+        {/* Last updated text or skeleton */}
+        {isLoading && !balanceData.lastUpdated ? (
+          <SkeletonText isLoading={true} width="60%" />
+        ) : (
+          <Text size="14px" mb="8px">
+            {balanceData.lastUpdated
+              ? `Last updated: ${balanceData.lastUpdated.toLocaleString()}`
+              : 'Fetching latest balances...'}
+          </Text>
+        )}
 
         {error && (
           <Text size="14px" mb="16px" style={{ color: 'var(--error)' }}>
@@ -279,23 +399,45 @@ const TreasuryBalanceCounter = () => {
             Treasury Balances
           </Text>
 
-          {cryptoData.map(crypto => (
-            <CryptoItem key={crypto.id} justify="space-between" align="center">
-              <Flex align="center">
-                <CryptoIcon src={crypto.icon} alt={crypto.name} />
-                <CryptoName>{crypto.name}</CryptoName>
-              </Flex>
+          {/* Skeleton or actual crypto items */}
+          {isLoading && !balanceData.lastUpdated ? (
+            // Skeleton loading state
+            <>
+              {[1, 2, 3].map(index => (
+                <SkeletonCryptoItem key={index}>
+                  <Flex align="center">
+                    <SkeletonIcon isLoading={true} />
+                    <SkeletonText isLoading={true} width="80px" />
+                  </Flex>
+                  <Flex direction="column" align="flex-end">
+                    <SkeletonText isLoading={true} width="100px" mb="4px" />
+                    <SkeletonText isLoading={true} width="70px" />
+                  </Flex>
+                </SkeletonCryptoItem>
+              ))}
+            </>
+          ) : (
+            // Actual data
+            <>
+              {cryptoData.map(crypto => (
+                <CryptoItem key={crypto.id} justify="space-between" align="center">
+                  <Flex align="center">
+                    <CryptoIcon src={crypto.icon} alt={crypto.name} />
+                    <CryptoName>{crypto.name}</CryptoName>
+                  </Flex>
 
-              <Flex direction="column" align="flex-end">
-                <CryptoBalance>
-                  {formatCrypto(balanceData.balances[crypto.id], crypto.symbol)}
-                </CryptoBalance>
-                <CryptoValue>
-                  {formatCurrency(balanceData.usdValues[crypto.id])}
-                </CryptoValue>
-              </Flex>
-            </CryptoItem>
-          ))}
+                  <Flex direction="column" align="flex-end">
+                    <CryptoBalance>
+                      {formatCrypto(balanceData.balances[crypto.id], crypto.symbol)}
+                    </CryptoBalance>
+                    <CryptoValue>
+                      {formatCurrency(balanceData.usdValues[crypto.id])}
+                    </CryptoValue>
+                  </Flex>
+                </CryptoItem>
+              ))}
+            </>
+          )}
         </CryptoBreakdown>
 
         {/* Debug information - press Ctrl+Shift+D to toggle */}
@@ -318,7 +460,10 @@ const TreasuryBalanceCounter = () => {
                 balances: balanceData.balances,
                 prices: balanceData.prices,
                 usdValues: balanceData.usdValues,
-                totalUSD: balanceData.totalUSD
+                totalUSD: balanceData.totalUSD,
+                isLoading,
+                isRefreshing,
+                initialLoad
               }, null, 2)}
             </pre>
             <div style={{ marginTop: '8px', fontSize: '10px', color: '#aaa' }}>
@@ -334,8 +479,13 @@ const TreasuryBalanceCounter = () => {
           </div>
         )}
 
-        <RefreshButton secondary onClick={fetchBalances}>
-          Refresh Balances
+        {/* Refresh button with loading indicator */}
+        <RefreshButton
+          secondary
+          onClick={() => fetchBalances(true)}
+          disabled={isLoading || isRefreshing}
+        >
+          {isRefreshing ? 'Refreshing...' : 'Refresh Balances'}
         </RefreshButton>
       </CounterContent>
     </CounterCard>

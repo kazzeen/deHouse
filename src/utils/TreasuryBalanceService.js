@@ -62,6 +62,85 @@ class TreasuryBalanceService {
       sol: 0
     };
     this.lastUpdated = null;
+
+    // Cache duration in milliseconds (5 minutes)
+    this.cacheDuration = 5 * 60 * 1000;
+
+    // API request timeout in milliseconds (10 seconds)
+    this.requestTimeout = 10000;
+
+    // Flag to track if a fetch is in progress
+    this.isFetching = false;
+
+    // Load cached data if available
+    this.loadFromCache();
+  }
+
+  // Load data from localStorage cache
+  loadFromCache() {
+    try {
+      const cachedData = localStorage.getItem('treasuryBalanceData');
+      if (cachedData) {
+        const parsedData = JSON.parse(cachedData);
+
+        // Check if cache is still valid (not older than cacheDuration)
+        const cacheTimestamp = new Date(parsedData.timestamp);
+        const now = new Date();
+        const cacheAge = now - cacheTimestamp;
+
+        if (cacheAge < this.cacheDuration) {
+          console.log('Loading data from cache. Cache age:', Math.round(cacheAge / 1000), 'seconds');
+
+          // Restore data from cache
+          this.balances = parsedData.balances;
+          this.prices = parsedData.prices;
+          this.lastUpdated = new Date(parsedData.lastUpdated);
+
+          return true;
+        } else {
+          console.log('Cache expired. Cache age:', Math.round(cacheAge / 1000), 'seconds');
+          return false;
+        }
+      }
+    } catch (error) {
+      console.error('Error loading from cache:', error);
+    }
+    return false;
+  }
+
+  // Save data to localStorage cache
+  saveToCache() {
+    try {
+      const cacheData = {
+        balances: this.balances,
+        prices: this.prices,
+        lastUpdated: this.lastUpdated,
+        timestamp: new Date().toISOString()
+      };
+
+      localStorage.setItem('treasuryBalanceData', JSON.stringify(cacheData));
+      console.log('Data saved to cache');
+    } catch (error) {
+      console.error('Error saving to cache:', error);
+    }
+  }
+
+  // Check if cache is valid
+  isCacheValid() {
+    try {
+      const cachedData = localStorage.getItem('treasuryBalanceData');
+      if (!cachedData) return false;
+
+      const parsedData = JSON.parse(cachedData);
+      const cacheTimestamp = new Date(parsedData.timestamp);
+      const now = new Date();
+      const cacheAge = now - cacheTimestamp;
+
+      return cacheAge < this.cacheDuration;
+    } catch (error) {
+      console.error('Error checking cache validity:', error);
+      return false;
+    }
   }
 
   /**
@@ -384,7 +463,7 @@ class TreasuryBalanceService {
   async fetchSolanaBalanceFromRPC(rpcEndpoint) {
     const MAX_RETRIES = 2;
     const RETRY_DELAY = 2000; // 2 seconds
-    
+
     for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
       try {
         if (attempt > 0) {
@@ -392,11 +471,11 @@ class TreasuryBalanceService {
           // Wait before retry
           await new Promise(resolve => setTimeout(resolve, RETRY_DELAY));
         }
-        
+
         console.log(`Fetching SOL balance from RPC: ${rpcEndpoint}...`);
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 second timeout
-        
+
         const response = await fetch(rpcEndpoint, {
           method: 'POST',
           headers: {
@@ -410,7 +489,7 @@ class TreasuryBalanceService {
           }),
           signal: controller.signal
         });
-        
+
         clearTimeout(timeoutId);
 
         if (!response.ok) {
@@ -420,14 +499,14 @@ class TreasuryBalanceService {
         }
 
         const data = await response.json();
-        
+
         // Validate the response data structure
         if (data.error) {
           console.warn(`RPC error from ${rpcEndpoint}:`, data.error);
           if (attempt < MAX_RETRIES) continue;
           return null;
         }
-        
+
         // Check for different response formats
         let lamports;
         if (data.result && typeof data.result.value === 'number') {
@@ -460,12 +539,12 @@ class TreasuryBalanceService {
         } else {
           console.warn(`Error fetching from ${rpcEndpoint}:`, error);
         }
-        
+
         if (attempt < MAX_RETRIES) continue;
         return null;
       }
     }
-    
+
     return null; // Should not reach here, but just in case
   }
 
@@ -476,7 +555,7 @@ class TreasuryBalanceService {
   async fetchSolanaBalanceFromShyft() {
     const MAX_RETRIES = 2;
     const RETRY_DELAY = 2000; // 2 seconds
-    
+
     for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
       try {
         if (attempt > 0) {
@@ -484,13 +563,13 @@ class TreasuryBalanceService {
           // Wait before retry
           await new Promise(resolve => setTimeout(resolve, RETRY_DELAY));
         }
-        
+
         console.log('Fetching SOL balance from Shyft API...');
         const shyftUrl = `${SHYFT_API}/wallet/balance?network=mainnet-beta&wallet=${SOL_ADDRESS}&token=So11111111111111111111111111111111111111112`;
 
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 second timeout
-        
+
         const response = await fetch(shyftUrl, {
           method: 'GET',
           headers: {
@@ -499,7 +578,7 @@ class TreasuryBalanceService {
           },
           signal: controller.signal
         });
-        
+
         clearTimeout(timeoutId);
 
         if (!response.ok) {
@@ -509,10 +588,10 @@ class TreasuryBalanceService {
         }
 
         const data = await response.json();
-        
+
         // Check for different response formats
         let balanceSOL;
-        
+
         if (data.result && typeof data.result.balance === 'string') {
           balanceSOL = parseFloat(data.result.balance);
           if (isNaN(balanceSOL)) {
@@ -527,7 +606,7 @@ class TreasuryBalanceService {
           if (attempt < MAX_RETRIES) continue;
           return null;
         }
-        
+
         console.log('SOL balance from Shyft API:', balanceSOL);
         return balanceSOL;
       } catch (error) {
@@ -536,12 +615,12 @@ class TreasuryBalanceService {
         } else {
           console.warn('Shyft API error:', error);
         }
-        
+
         if (attempt < MAX_RETRIES) continue;
         return null;
       }
     }
-    
+
     return null; // Should not reach here, but just in case
   }
 
@@ -552,7 +631,7 @@ class TreasuryBalanceService {
   async fetchSolanaBalanceFromSolscan() {
     const MAX_RETRIES = 2;
     const RETRY_DELAY = 2000; // 2 seconds
-    
+
     for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
       try {
         if (attempt > 0) {
@@ -560,20 +639,20 @@ class TreasuryBalanceService {
           // Wait before retry
           await new Promise(resolve => setTimeout(resolve, RETRY_DELAY));
         }
-        
+
         console.log('Fetching SOL balance from Solscan...');
         const solscanUrl = `${SOLSCAN_API}/account/${SOL_ADDRESS}`;
-        
+
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 second timeout
-        
+
         const response = await fetch(solscanUrl, {
           headers: {
             'Accept': 'application/json'
           },
           signal: controller.signal
         });
-        
+
         clearTimeout(timeoutId);
 
         if (!response.ok) {
@@ -583,7 +662,7 @@ class TreasuryBalanceService {
         }
 
         const data = await response.json();
-        
+
         // Check for different response formats
         let lamports;
         if (data && typeof data.lamports === 'number') {
@@ -613,12 +692,12 @@ class TreasuryBalanceService {
         } else {
           console.warn('Solscan API error:', error);
         }
-        
+
         if (attempt < MAX_RETRIES) continue;
         return null;
       }
     }
-    
+
     return null; // Should not reach here, but just in case
   }
 
@@ -629,7 +708,7 @@ class TreasuryBalanceService {
   async fetchSolanaBalanceFromSolflare() {
     const MAX_RETRIES = 2;
     const RETRY_DELAY = 2000; // 2 seconds
-    
+
     for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
       try {
         if (attempt > 0) {
@@ -637,17 +716,17 @@ class TreasuryBalanceService {
           // Wait before retry
           await new Promise(resolve => setTimeout(resolve, RETRY_DELAY));
         }
-        
+
         console.log('Fetching SOL balance from Solflare...');
         const solflareUrl = `${SOLFLARE_API}/v0/account/${SOL_ADDRESS}`;
-        
+
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 second timeout
-        
+
         const response = await fetch(solflareUrl, {
           signal: controller.signal
         });
-        
+
         clearTimeout(timeoutId);
 
         if (!response.ok) {
@@ -657,7 +736,7 @@ class TreasuryBalanceService {
         }
 
         const data = await response.json();
-        
+
         // Check for different response formats
         let lamports;
         if (data && typeof data.lamports === 'number') {
@@ -696,12 +775,12 @@ class TreasuryBalanceService {
         } else {
           console.warn('Solflare API error:', error);
         }
-        
+
         if (attempt < MAX_RETRIES) continue;
         return null;
       }
     }
-    
+
     return null; // Should not reach here, but just in case
   }
 
@@ -712,83 +791,83 @@ class TreasuryBalanceService {
   async fetchSolanaBalance() {
     try {
       console.log('Fetching Solana balance for address:', SOL_ADDRESS);
-      
+
       // First try all RPC endpoints in parallel
-      const rpcPromises = SOLANA_RPC_ENDPOINTS.map(endpoint => 
+      const rpcPromises = SOLANA_RPC_ENDPOINTS.map(endpoint =>
         this.fetchSolanaBalanceFromRPC(endpoint)
       );
-      
+
       // Also try third-party APIs in parallel
       const apiPromises = [
         this.fetchSolanaBalanceFromShyft(),
         this.fetchSolanaBalanceFromSolscan(),
         this.fetchSolanaBalanceFromSolflare()
       ];
-      
+
       // Wait for all requests to complete
       const allResults = await Promise.allSettled([...rpcPromises, ...apiPromises]);
-      
+
       // Filter out failed requests and null results
       const validResults = allResults
         .filter(result => result.status === 'fulfilled' && result.value !== null)
         .map(result => result.value);
-      
+
       console.log('Valid SOL balance results:', validResults);
-      
+
       if (validResults.length === 0) {
         console.warn('All SOL balance fetch attempts failed');
         this.balances.sol = 0;
         return 0;
       }
-      
+
       // Enhanced statistical approach to determine the most accurate balance
       // First, check if we have enough results for statistical analysis
       if (validResults.length >= 3) {
         // Sort the results for analysis
         const sortedResults = [...validResults].sort((a, b) => a - b);
         console.log('Sorted SOL balance results:', sortedResults);
-        
+
         // Calculate mean
         const sum = sortedResults.reduce((acc, val) => acc + val, 0);
         const mean = sum / sortedResults.length;
-        
+
         // Calculate standard deviation
         const squaredDiffs = sortedResults.map(val => Math.pow(val - mean, 2));
         const avgSquaredDiff = squaredDiffs.reduce((acc, val) => acc + val, 0) / squaredDiffs.length;
         const stdDev = Math.sqrt(avgSquaredDiff);
-        
+
         console.log(`SOL balance statistics - Mean: ${mean}, StdDev: ${stdDev}`);
-        
+
         // Filter out outliers (values more than 2 standard deviations from the mean)
         // Only if we have enough data points and standard deviation is significant
         if (sortedResults.length > 4 && stdDev > 0.0001) {
           const filteredResults = sortedResults.filter(
             val => Math.abs(val - mean) <= 2 * stdDev
           );
-          
+
           if (filteredResults.length > 0) {
             console.log('Filtered SOL balance results (outliers removed):', filteredResults);
-            
+
             // Calculate median of filtered results
             const medianIndex = Math.floor(filteredResults.length / 2);
             const medianBalance = filteredResults.length % 2 === 0
               ? (filteredResults[medianIndex - 1] + filteredResults[medianIndex]) / 2
               : filteredResults[medianIndex];
-            
+
             console.log('Final SOL balance (statistical median):', medianBalance);
             this.balances.sol = medianBalance;
             return medianBalance;
           }
         }
       }
-      
+
       // Fallback to simple median if we don't have enough data points or outlier removal left us with nothing
       const sortedResults = [...validResults].sort((a, b) => a - b);
       const medianIndex = Math.floor(sortedResults.length / 2);
       const medianBalance = sortedResults.length % 2 === 0
         ? (sortedResults[medianIndex - 1] + sortedResults[medianIndex]) / 2
         : sortedResults[medianIndex];
-      
+
       console.log('Final SOL balance (simple median):', medianBalance);
       this.balances.sol = medianBalance;
       return medianBalance;
@@ -802,26 +881,83 @@ class TreasuryBalanceService {
 
   /**
    * Fetch all balances and calculate total in USD
+   * @param {boolean} forceRefresh - Whether to force a refresh even if cache is valid
+   * @returns {Promise<Object>} - The balance data
    */
-  async fetchAllBalances() {
+  async fetchAllBalances(forceRefresh = false) {
+    // If a fetch is already in progress, return the current data
+    if (this.isFetching) {
+      console.log('Fetch already in progress, returning current data');
+      return this.getBalances();
+    }
+
+    // Check if we have valid cached data and forceRefresh is false
+    if (!forceRefresh && this.isCacheValid()) {
+      console.log('Using cached data (still valid)');
+      return this.getBalances();
+    }
+
+    // Set fetching flag to prevent multiple simultaneous fetches
+    this.isFetching = true;
+
     try {
       console.log('Fetching all treasury balances...');
+      const startTime = performance.now();
 
-      // First fetch current prices
-      await this.fetchPrices();
+      // First fetch current prices with a timeout
+      const pricePromise = Promise.race([
+        this.fetchPrices(),
+        new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('Price fetch timeout')), this.requestTimeout)
+        )
+      ]).catch(error => {
+        console.warn('Price fetch failed or timed out:', error);
+        // If prices fail, we'll use the cached prices or zeros
+        return this.prices;
+      });
+
+      await pricePromise;
       console.log('Current prices:', this.prices);
 
-      // Then fetch all balances in parallel
+      // Then fetch all balances in parallel with timeouts
       console.log('Fetching individual balances...');
-      const results = await Promise.allSettled([
-        this.fetchTotalBitcoinBalance(),
-        this.fetchEthereumBalance(),
-        this.fetchSolanaBalance()
-      ]);
-      
+      const balancePromises = [
+        Promise.race([
+          this.fetchTotalBitcoinBalance(),
+          new Promise((_, reject) =>
+            setTimeout(() => reject(new Error('BTC fetch timeout')), this.requestTimeout * 1.5)
+          )
+        ]).catch(error => {
+          console.warn('BTC fetch failed or timed out:', error);
+          return this.balances.btc; // Use cached value on error
+        }),
+
+        Promise.race([
+          this.fetchEthereumBalance(),
+          new Promise((_, reject) =>
+            setTimeout(() => reject(new Error('ETH fetch timeout')), this.requestTimeout * 1.5)
+          )
+        ]).catch(error => {
+          console.warn('ETH fetch failed or timed out:', error);
+          return this.balances.eth; // Use cached value on error
+        }),
+
+        Promise.race([
+          this.fetchSolanaBalance(),
+          new Promise((_, reject) =>
+            setTimeout(() => reject(new Error('SOL fetch timeout')), this.requestTimeout * 1.5)
+          )
+        ]).catch(error => {
+          console.warn('SOL fetch failed or timed out:', error);
+          return this.balances.sol; // Use cached value on error
+        })
+      ];
+
+      const results = await Promise.allSettled(balancePromises);
+
       // Update lastUpdated timestamp
       this.lastUpdated = new Date();
-      
+
       // Log results
       console.log('Balance fetch results:', results.map(r => r.status));
       results.forEach((result, index) => {
@@ -832,33 +968,57 @@ class TreasuryBalanceService {
           console.error(`${currency} balance fetch failed:`, result.reason);
         }
       });
-      
+
+      // Calculate individual USD values
+      const usdValues = {
+        btc: this.balances.btc * this.prices.btc,
+        eth: this.balances.eth * this.prices.eth,
+        sol: this.balances.sol * this.prices.sol
+      };
+
       // Calculate total in USD
-      const totalUSD = (
-        this.balances.btc * this.prices.btc +
-        this.balances.eth * this.prices.eth +
-        this.balances.sol * this.prices.sol
-      );
-      
+      const totalUSD = Object.values(usdValues).reduce((sum, value) => sum + value, 0);
+
+      const endTime = performance.now();
+      console.log(`Fetch completed in ${Math.round(endTime - startTime)}ms`);
+      console.log('USD values:', usdValues);
       console.log('Total treasury value in USD:', totalUSD);
       console.log('Individual balances:', this.balances);
-      
+
+      // Save to cache
+      this.saveToCache();
+
+      // Reset fetching flag
+      this.isFetching = false;
+
       return {
         balances: { ...this.balances },
         prices: { ...this.prices },
+        usdValues, // Include the USD values for each cryptocurrency
         totalUSD,
         lastUpdated: this.lastUpdated
       };
     } catch (error) {
       console.error('Error fetching all balances:', error);
+
+      // Calculate individual USD values even in case of error
+      const usdValues = {
+        btc: this.balances.btc * this.prices.btc,
+        eth: this.balances.eth * this.prices.eth,
+        sol: this.balances.sol * this.prices.sol
+      };
+
+      // Calculate total in USD
+      const totalUSD = Object.values(usdValues).reduce((sum, value) => sum + value, 0);
+
+      // Reset fetching flag
+      this.isFetching = false;
+
       return {
         balances: { ...this.balances },
         prices: { ...this.prices },
-        totalUSD: (
-          this.balances.btc * this.prices.btc +
-          this.balances.eth * this.prices.eth +
-          this.balances.sol * this.prices.sol
-        ),
+        usdValues, // Include the USD values for each cryptocurrency
+        totalUSD,
         lastUpdated: this.lastUpdated || new Date()
       };
     }
@@ -866,14 +1026,21 @@ class TreasuryBalanceService {
 
   // Export the service instance
   getBalances() {
+    // Calculate individual USD values
+    const usdValues = {
+      btc: this.balances.btc * this.prices.btc,
+      eth: this.balances.eth * this.prices.eth,
+      sol: this.balances.sol * this.prices.sol
+    };
+
+    // Calculate total in USD
+    const totalUSD = Object.values(usdValues).reduce((sum, value) => sum + value, 0);
+
     return {
       balances: { ...this.balances },
       prices: { ...this.prices },
-      totalUSD: (
-        this.balances.btc * this.prices.btc +
-        this.balances.eth * this.prices.eth +
-        this.balances.sol * this.prices.sol
-      ),
+      usdValues, // Include the USD values for each cryptocurrency
+      totalUSD,
       lastUpdated: this.lastUpdated
     };
   }

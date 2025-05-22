@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import ReactDOM from 'react-dom/client';
 import { HashRouter as Router, Routes, Route } from 'react-router-dom';
 import { UserProvider } from './utils/UserContext';
@@ -13,6 +13,42 @@ import ProfilePage from './pages/ProfilePage';
 import { WalletProvider } from './utils/WalletContext';
 import { DonationProvider } from './utils/DonationContext';
 
+// Video background component
+const VideoBackground = () => {
+  useEffect(() => {
+    // Create video element
+    const videoElement = document.createElement('video');
+    videoElement.id = 'video-background';
+    videoElement.autoplay = true;
+    videoElement.loop = true;
+    videoElement.muted = true;
+    videoElement.playsInline = true;
+
+    // Set video source
+    const source = document.createElement('source');
+    source.src = 'https://ik.imagekit.io/kimji3uwr/globe%20backgrond.mp4?tr=orig&updatedAt=1747891630722';
+    source.type = 'video/mp4';
+
+    // Append source to video and video to body
+    videoElement.appendChild(source);
+    document.body.appendChild(videoElement);
+
+    // Start playing the video
+    videoElement.play().catch(error => {
+      console.error('Error playing the video:', error);
+    });
+
+    // Clean up on component unmount
+    return () => {
+      if (document.body.contains(videoElement)) {
+        document.body.removeChild(videoElement);
+      }
+    };
+  }, []);
+
+  return null; // This component doesn't render anything directly
+};
+
 const App = () => {
   return (
     <WalletProvider>
@@ -20,6 +56,7 @@ const App = () => {
       <DonationProvider>
         <Router>
           <GlobalStyle />
+          <VideoBackground />
           <div style={{
             position: 'fixed',
             top: 0,

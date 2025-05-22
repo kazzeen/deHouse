@@ -33,7 +33,7 @@ export const Button = styled.button`
   gap: 8px;
   position: relative;
   z-index: 1;
-  
+
   &::before {
     content: '';
     position: absolute;
@@ -53,21 +53,21 @@ export const Button = styled.button`
     -webkit-mask-composite: xor;
     padding: 2px;
   }
-  
+
   &:hover {
     background-color: ${props => props.secondary ? 'var(--secondary-dark)' : 'var(--primary-dark)'};
     transform: translateY(-2px);
     box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2);
-    
+
     &::before {
       animation: ${rainbowGradientAnimation} 3s linear infinite;
     }
   }
-  
+
   &:disabled {
     opacity: 0.6;
     cursor: not-allowed;
-    
+
     &::before {
       animation: none;
       background: rgba(255, 255, 255, 0.1);
@@ -76,12 +76,14 @@ export const Button = styled.button`
 `;
 
 export const Card = styled.div`
-  background-color: var(--card-bg);
+  background-color: rgba(51, 51, 51, 0.3); /* More transparent card background */
   border-radius: 16px;
   padding: 24px;
   box-shadow: 0 8px 30px rgba(0, 0, 0, 0.12);
   transition: transform 0.3s ease;
-  
+  backdrop-filter: blur(15px); /* Increased blur effect for better readability over video */
+  -webkit-backdrop-filter: blur(15px); /* For Safari support */
+
   &:hover {
     transform: translateY(-5px);
   }
@@ -100,11 +102,11 @@ export const Grid = styled.div`
   display: grid;
   grid-template-columns: repeat(${props => props.columns || 3}, 1fr);
   gap: ${props => props.gap || '20px'};
-  
+
   @media (max-width: 768px) {
     grid-template-columns: repeat(2, 1fr);
   }
-  
+
   @media (max-width: 480px) {
     grid-template-columns: 1fr;
   }
@@ -154,19 +156,21 @@ export const Badge = styled.span`
 export const Input = styled.input`
   width: 100%;
   padding: 12px 16px;
-  background-color: var(--card-bg);
+  background-color: rgba(51, 51, 51, 0.3); /* More transparent input background */
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 8px;
   color: var(--text-primary);
   font-size: 16px;
   transition: all 0.3s ease;
-  
+  backdrop-filter: blur(15px); /* Increased blur effect for better readability over video */
+  -webkit-backdrop-filter: blur(15px); /* For Safari support */
+
   &:focus {
     outline: none;
     border-color: var(--primary);
     box-shadow: 0 0 0 2px rgba(108, 92, 231, 0.2);
   }
-  
+
   &::placeholder {
     color: rgba(255, 255, 255, 0.4);
   }
