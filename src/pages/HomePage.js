@@ -154,10 +154,9 @@ const HomePage = () => {
         <Container>
           <HeroContent>
             <HeroLeftColumn>
-              <Heading level={1}>Support Our DAO Treasury with Crypto Donations</Heading>
-              <Text size="20px">
-                Join our community by donating cryptocurrency to the deHouse DAO treasury.
-                Every donation earns you points on our leaderboard and helps fund our mission.
+              <Heading level={1}>Join deHouse and Donate to Empower Our DAO Community</Heading>
+               <Text size="20px"> Donate Assets, Earn Points, Unlock Future Rewards!</Text>
+               <Text size="20px"> Fuel the Future of the deHouse DAO. Every donation earns you points on our leaderboard and helps fund our mission of revolutionizing the RWA industry.
               </Text>
 
               <HeroButtons gap="16px">
