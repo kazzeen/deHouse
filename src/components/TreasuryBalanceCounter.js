@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import styled, { keyframes } from 'styled-components';
 import { Card, Heading, Text, Flex, Button } from '../styles/StyledComponents';
 import treasuryBalanceService from '../utils/TreasuryBalanceService';
+import QRCodeModal from './QRCodeModal';
 
 // Import crypto icons
 import btcIcon from '../assets/btc.svg';
@@ -89,11 +90,38 @@ const CryptoItem = styled(Flex)`
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
   border: 1px solid rgba(255, 255, 255, 0.05);
+  cursor: pointer;
+  position: relative;
 
   &:hover {
     background-color: rgba(255, 255, 255, 0.15);
     transform: translateY(-2px);
     box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+  }
+
+  &::after {
+    content: 'Click for QR';
+    position: absolute;
+    top: 50%;
+    right: 12px;
+    transform: translateY(-50%);
+    font-size: 10px;
+    color: rgba(255, 255, 255, 0.5);
+    background-color: rgba(108, 92, 231, 0.2);
+    padding: 2px 6px;
+    border-radius: 4px;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+  }
+
+  &:hover::after {
+    opacity: 1;
+  }
+
+  @media (max-width: 768px) {
+    &::after {
+      content: 'Tap for QR';
+    }
   }
 `;
 
@@ -214,6 +242,10 @@ const TreasuryBalanceCounter = () => {
   const [error, setError] = useState(null);
   const [debugMode, setDebugMode] = useState(false);
   const [solanaTestResults, setSolanaTestResults] = useState(null);
+
+  // QR code modal states
+  const [qrModalOpen, setQrModalOpen] = useState(false);
+  const [selectedCrypto, setSelectedCrypto] = useState(null);
 
   // Function to fetch balances with progressive loading
   const fetchBalances = async (forceRefresh = false) => {
@@ -374,6 +406,17 @@ const TreasuryBalanceCounter = () => {
 
   return (
     <CounterCard>
+      {/* QR Code Modal */}
+      {selectedCrypto && (
+        <QRCodeModal
+          isOpen={qrModalOpen}
+          onClose={() => setQrModalOpen(false)}
+          cryptoType={selectedCrypto.id}
+          cryptoName={selectedCrypto.name}
+          cryptoIcon={selectedCrypto.icon}
+        />
+      )}
+
       {/* Only show full overlay on initial load */}
       <LoadingOverlay initialLoad={initialLoad}>
         <LoadingSpinner />
@@ -434,7 +477,15 @@ const TreasuryBalanceCounter = () => {
             // Actual data
             <>
               {cryptoData.map(crypto => (
-                <CryptoItem key={crypto.id} justify="space-between" align="center">
+                <CryptoItem
+                  key={crypto.id}
+                  justify="space-between"
+                  align="center"
+                  onClick={() => {
+                    setSelectedCrypto(crypto);
+                    setQrModalOpen(true);
+                  }}
+                >
                   <Flex align="center">
                     <CryptoIcon src={crypto.icon} alt={crypto.name} />
                     <CryptoName>{crypto.name}</CryptoName>
