@@ -1,12 +1,33 @@
 import React, { useState, useEffect } from 'react';
-import styled from 'styled-components';
+import styled, { keyframes } from 'styled-components';
 import { Container, Section, Heading, Text, Button, Flex, Card, Input, Divider, Badge } from '../styles/StyledComponents';
 import WalletConnectButton from '../components/WalletConnectButton';
 import AdminControls from '../components/AdminControls';
 import { useWallet } from '../utils/WalletContext';
 import { useDonation } from '../utils/DonationContext';
 import { useNavigate } from 'react-router-dom';
+
 import databaseService from '../utils/DatabaseService';
+
+// Animation for the gradient background
+const gradientAnimation = keyframes`
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+`;
+
+// Reusable styled component for animated gradient text
+const AnimatedGradientText = styled.span`
+  background: linear-gradient(90deg, #3f87a6, #ebf8e1, #f69d3c, #561423, #3f87a6);
+  background-size: 300% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  text-shadow: 0 1px 5px rgba(63, 135, 166, 0.3);
+  animation: ${gradientAnimation} 6s linear infinite;
+  transform: translateZ(0); /* Hardware acceleration */
+  font-weight: 700;
+`;
 
 // Admin section styling
 const AdminSection = styled(Card)`
@@ -91,8 +112,15 @@ const AddressCell = styled.div`
 const PointsCell = styled.div`
   width: 120px;
   text-align: right;
-  font-weight: 600;
-  color: var(--primary);
+  font-weight: 700;
+  background: linear-gradient(90deg, #3f87a6, #ebf8e1, #f69d3c, #561423, #3f87a6);
+  background-size: 300% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  text-shadow: 0 1px 5px rgba(63, 135, 166, 0.3);
+  animation: ${gradientAnimation} 6s linear infinite;
+  transform: translateZ(0); /* Hardware acceleration */
 `;
 
 const DonationsCell = styled.div`
@@ -163,8 +191,16 @@ const StatBox = styled.div`
 
   h3 {
     font-size: 32px;
-    color: var(--primary);
+    font-weight: 700;
+    background: linear-gradient(90deg, #3f87a6, #ebf8e1, #f69d3c, #561423, #3f87a6);
+    background-size: 300% 100%;
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    text-shadow: 0 1px 5px rgba(63, 135, 166, 0.3);
     margin-bottom: 8px;
+    animation: ${gradientAnimation} 6s linear infinite;
+    transform: translateZ(0); /* Hardware acceleration */
   }
 
   p {
@@ -450,7 +486,19 @@ const LeaderboardPage = () => {
                   <div style={{ flex: '1' }}>
                     {donation.amount || 0} {donation.currency ? donation.currency.toUpperCase() : ''}
                   </div>
-                  <div style={{ flex: '1', textAlign: 'right', color: 'var(--primary)', fontWeight: '600' }}>
+                  <div style={{
+                    flex: '1',
+                    textAlign: 'right',
+                    fontWeight: '700',
+                    background: 'linear-gradient(90deg, #3f87a6, #ebf8e1, #f69d3c, #561423, #3f87a6)',
+                    backgroundSize: '300% 100%',
+                    WebkitBackgroundClip: 'text',
+                    backgroundClip: 'text',
+                    WebkitTextFillColor: 'transparent',
+                    textShadow: '0 1px 5px rgba(63, 135, 166, 0.3)',
+                    animation: `${gradientAnimation} 6s linear infinite`,
+                    transform: 'translateZ(0)' /* Hardware acceleration */
+                  }}>
                     {(donation.points || 0).toLocaleString()}
                   </div>
                 </TableRow>
