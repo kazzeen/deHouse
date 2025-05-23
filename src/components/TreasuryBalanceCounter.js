@@ -19,6 +19,13 @@ const shimmer = keyframes`
   }
 `;
 
+// Animation for the gradient background
+const gradientAnimation = keyframes`
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+`;
+
 const CounterCard = styled(Card)`
   position: relative;
   overflow: hidden;
@@ -62,11 +69,15 @@ const TotalAmount = styled.div`
   font-size: 42px;
   font-weight: 800;
   margin: 16px 0;
-  background: linear-gradient(90deg, var(--primary) 0%, var(--secondary) 100%);
+  background: linear-gradient(90deg, #3f87a6, #ebf8e1, #f69d3c, #561423, #3f87a6);
+  background-size: 300% 100%;
   -webkit-background-clip: text;
+  background-clip: text;
   -webkit-text-fill-color: transparent;
-  text-shadow: 0 2px 10px rgba(108, 92, 231, 0.3);
+  text-shadow: 0 2px 10px rgba(63, 135, 166, 0.3);
   letter-spacing: -0.5px;
+  animation: ${gradientAnimation} 6s linear infinite;
+  transform: translateZ(0); /* Hardware acceleration */
 `;
 
 const RefreshButton = styled(Button)`
@@ -143,7 +154,14 @@ const CryptoBalance = styled.div`
 
 const CryptoValue = styled.div`
   font-weight: 600;
-  color: var(--primary);
+  background: linear-gradient(90deg, #3f87a6, #ebf8e1, #f69d3c, #561423, #3f87a6);
+  background-size: 300% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  text-shadow: 0 1px 5px rgba(63, 135, 166, 0.2);
+  animation: ${gradientAnimation} 6s linear infinite;
+  transform: translateZ(0); /* Hardware acceleration */
 `;
 
 // Skeleton loading components
@@ -423,7 +441,15 @@ const TreasuryBalanceCounter = () => {
       </LoadingOverlay>
 
       <CounterContent>
-        <Heading level={3}>Total Funds Raised</Heading>
+        <Heading level={3} style={{
+          color: 'white',
+          WebkitBackgroundClip: 'unset',
+          WebkitTextFillColor: 'white',
+          backgroundImage: 'none',
+          textShadow: '0 2px 10px rgba(0, 0, 0, 0.2)'
+        }}>
+          Total Funds Raised
+        </Heading>
 
         {/* Skeleton or actual amount */}
         {isLoading && !balanceData.lastUpdated ? (
@@ -452,7 +478,11 @@ const TreasuryBalanceCounter = () => {
         )}
 
         <CryptoBreakdown>
-          <Text size="16px" mb="16px" style={{ fontWeight: 600 }}>
+          <Text size="16px" mb="16px" style={{
+            fontWeight: 600,
+            color: 'white',
+            textShadow: '0 2px 10px rgba(0, 0, 0, 0.2)'
+          }}>
             Treasury Balances
           </Text>
 
@@ -584,7 +614,7 @@ const TreasuryBalanceCounter = () => {
         {/* Refresh button with loading indicator */}
         <RefreshButton
           secondary
-          onClick={() => fetchBalances(true)}
+          onClick={handleRefresh}
           disabled={isLoading || isRefreshing}
         >
           {isRefreshing ? 'Refreshing...' : 'Refresh Balances'}
