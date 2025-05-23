@@ -625,6 +625,105 @@ class TreasuryBalanceService {
   }
 
   /**
+   * Fetch Solana balance from Shyft API's all_tokens endpoint
+   * This is an alternative endpoint that can be more reliable for some wallets
+   * @returns {Promise<number|null>} - The balance in SOL or null if failed
+   */
+  async fetchSolanaBalanceFromShyftAllTokens() {
+    const MAX_RETRIES = 3; // More retries for this fallback method
+    const RETRY_DELAY = 2000; // 2 seconds
+
+    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+      try {
+        if (attempt > 0) {
+          console.log(`Retry attempt ${attempt} for Shyft all_tokens API...`);
+          // Wait before retry
+          await new Promise(resolve => setTimeout(resolve, RETRY_DELAY));
+        }
+
+        console.log('Fetching SOL balance from Shyft all_tokens API...');
+        // Use the all_tokens endpoint which can be more reliable
+        const shyftUrl = `${SHYFT_API}/wallet/all_tokens?network=mainnet-beta&wallet=${SOL_ADDRESS}`;
+
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 20000); // 20 second timeout (longer for this endpoint)
+
+        const response = await fetch(shyftUrl, {
+          method: 'GET',
+          headers: {
+            'x-api-key': SHYFT_API_KEY,
+            'Content-Type': 'application/json'
+          },
+          signal: controller.signal
+        });
+
+        clearTimeout(timeoutId);
+
+        if (!response.ok) {
+          console.warn('Shyft all_tokens API response not OK:', response.status);
+          if (attempt < MAX_RETRIES) continue;
+          return null;
+        }
+
+        const data = await response.json();
+        console.log('Shyft all_tokens API response:', JSON.stringify(data));
+
+        // Find the SOL token in the response
+        if (data.result && Array.isArray(data.result)) {
+          // Look for the native SOL token (symbol: SOL, mint: So11111111111111111111111111111111111111112)
+          const solToken = data.result.find(token =>
+            token.symbol === 'SOL' ||
+            token.mint === 'So11111111111111111111111111111111111111112' ||
+            token.address === 'So11111111111111111111111111111111111111112'
+          );
+
+          if (solToken) {
+            let balanceSOL;
+
+            // Handle different response formats
+            if (typeof solToken.balance === 'string') {
+              balanceSOL = parseFloat(solToken.balance);
+            } else if (typeof solToken.balance === 'number') {
+              balanceSOL = solToken.balance;
+            } else if (typeof solToken.amount === 'string') {
+              balanceSOL = parseFloat(solToken.amount);
+            } else if (typeof solToken.amount === 'number') {
+              balanceSOL = solToken.amount;
+            } else if (typeof solToken.value === 'string') {
+              balanceSOL = parseFloat(solToken.value);
+            } else if (typeof solToken.value === 'number') {
+              balanceSOL = solToken.value;
+            }
+
+            if (!isNaN(balanceSOL) && balanceSOL > 0) {
+              console.log('SOL balance from Shyft all_tokens API:', balanceSOL);
+              return balanceSOL;
+            }
+          } else {
+            console.warn('SOL token not found in Shyft all_tokens response');
+          }
+        } else {
+          console.warn('Invalid Shyft all_tokens API response format:', data);
+        }
+
+        if (attempt < MAX_RETRIES) continue;
+        return null;
+      } catch (error) {
+        if (error.name === 'AbortError') {
+          console.warn('Timeout fetching from Shyft all_tokens API');
+        } else {
+          console.warn('Shyft all_tokens API error:', error);
+        }
+
+        if (attempt < MAX_RETRIES) continue;
+        return null;
+      }
+    }
+
+    return null; // Should not reach here, but just in case
+  }
+
+  /**
    * Fetch Solana balance from Solscan API with retry mechanism
    * @returns {Promise<number|null>} - The balance in SOL or null if failed
    */
@@ -816,6 +915,26 @@ class TreasuryBalanceService {
 
       if (validResults.length === 0) {
         console.warn('All SOL balance fetch attempts failed');
+
+        // Instead of resetting to 0, preserve the previous balance if it exists
+        if (this.balances.sol > 0) {
+          console.log('Preserving previous SOL balance:', this.balances.sol);
+          return this.balances.sol;
+        }
+
+        // Try to get the balance from Shyft API's all_tokens endpoint as a last resort
+        try {
+          const shyftBalance = await this.fetchSolanaBalanceFromShyftAllTokens();
+          if (shyftBalance !== null && shyftBalance > 0) {
+            console.log('Successfully retrieved SOL balance from Shyft all_tokens endpoint:', shyftBalance);
+            this.balances.sol = shyftBalance;
+            return shyftBalance;
+          }
+        } catch (shyftError) {
+          console.error('Error fetching from Shyft all_tokens endpoint:', shyftError);
+        }
+
+        // If we still don't have a balance, return 0
         this.balances.sol = 0;
         return 0;
       }
@@ -873,7 +992,29 @@ class TreasuryBalanceService {
       return medianBalance;
     } catch (error) {
       console.error('Error in fetchSolanaBalance:', error);
-      // Return 0 if there's an error
+
+      // Instead of resetting to 0, preserve the previous balance if it exists
+      if (this.balances.sol > 0) {
+        console.log('Error occurred, but preserving previous SOL balance:', this.balances.sol);
+        return this.balances.sol;
+      }
+
+      // Try to get the balance from cache as a last resort
+      try {
+        const cachedData = localStorage.getItem('treasuryBalanceData');
+        if (cachedData) {
+          const parsedData = JSON.parse(cachedData);
+          if (parsedData.balances && parsedData.balances.sol > 0) {
+            console.log('Using cached SOL balance as fallback:', parsedData.balances.sol);
+            this.balances.sol = parsedData.balances.sol;
+            return parsedData.balances.sol;
+          }
+        }
+      } catch (cacheError) {
+        console.error('Error accessing cache for SOL balance fallback:', cacheError);
+      }
+
+      // Only set to 0 if we have no other option
       this.balances.sol = 0;
       return 0;
     }
@@ -945,11 +1086,41 @@ class TreasuryBalanceService {
         Promise.race([
           this.fetchSolanaBalance(),
           new Promise((_, reject) =>
-            setTimeout(() => reject(new Error('SOL fetch timeout')), this.requestTimeout * 1.5)
+            setTimeout(() => reject(new Error('SOL fetch timeout')), this.requestTimeout * 2) // Longer timeout for SOL
           )
         ]).catch(error => {
           console.warn('SOL fetch failed or timed out:', error);
-          return this.balances.sol; // Use cached value on error
+
+          // First try to use the current balance if it exists
+          if (this.balances.sol > 0) {
+            console.log('Using current SOL balance as fallback:', this.balances.sol);
+            return this.balances.sol;
+          }
+
+          // Then try to get the balance from cache
+          try {
+            const cachedData = localStorage.getItem('treasuryBalanceData');
+            if (cachedData) {
+              const parsedData = JSON.parse(cachedData);
+              if (parsedData.balances && parsedData.balances.sol > 0) {
+                console.log('Using cached SOL balance as fallback:', parsedData.balances.sol);
+                return parsedData.balances.sol;
+              }
+            }
+          } catch (cacheError) {
+            console.error('Error accessing cache for SOL balance fallback:', cacheError);
+          }
+
+          // As a last resort, try the Shyft all_tokens endpoint directly
+          return this.fetchSolanaBalanceFromShyftAllTokens()
+            .then(balance => {
+              if (balance !== null && balance > 0) {
+                console.log('Successfully retrieved SOL balance from Shyft all_tokens endpoint:', balance);
+                return balance;
+              }
+              return this.balances.sol || 0; // Use current balance or 0 if all else fails
+            })
+            .catch(() => this.balances.sol || 0); // Use current balance or 0 if all else fails
         })
       ];
 
@@ -1043,6 +1214,63 @@ class TreasuryBalanceService {
       totalUSD,
       lastUpdated: this.lastUpdated
     };
+  }
+
+  /**
+   * Test function to verify Solana balance fetching
+   * This is used for debugging and testing the Solana balance fetching
+   */
+  async testSolanaBalance() {
+    console.log('Starting Solana balance test...');
+    console.log('Current SOL balance:', this.balances.sol);
+
+    try {
+      // Try the Shyft all_tokens endpoint first
+      console.log('Testing Shyft all_tokens endpoint...');
+      const shyftAllTokensBalance = await this.fetchSolanaBalanceFromShyftAllTokens();
+      console.log('Shyft all_tokens result:', shyftAllTokensBalance);
+
+      // Try the regular Shyft endpoint
+      console.log('Testing regular Shyft endpoint...');
+      const shyftBalance = await this.fetchSolanaBalanceFromShyft();
+      console.log('Regular Shyft result:', shyftBalance);
+
+      // Try the Solscan endpoint
+      console.log('Testing Solscan endpoint...');
+      const solscanBalance = await this.fetchSolanaBalanceFromSolscan();
+      console.log('Solscan result:', solscanBalance);
+
+      // Try the Solflare endpoint
+      console.log('Testing Solflare endpoint...');
+      const solflareBalance = await this.fetchSolanaBalanceFromSolflare();
+      console.log('Solflare result:', solflareBalance);
+
+      // Try the first RPC endpoint
+      console.log('Testing first RPC endpoint...');
+      const rpcBalance = await this.fetchSolanaBalanceFromRPC(SOLANA_RPC_ENDPOINTS[0]);
+      console.log('First RPC result:', rpcBalance);
+
+      // Now try the full fetchSolanaBalance method
+      console.log('Testing full fetchSolanaBalance method...');
+      const fullBalance = await this.fetchSolanaBalance();
+      console.log('Full balance result:', fullBalance);
+
+      return {
+        shyftAllTokensBalance,
+        shyftBalance,
+        solscanBalance,
+        solflareBalance,
+        rpcBalance,
+        fullBalance,
+        currentBalance: this.balances.sol
+      };
+    } catch (error) {
+      console.error('Error in testSolanaBalance:', error);
+      return {
+        error: error.message,
+        currentBalance: this.balances.sol
+      };
+    }
   }
 }
 

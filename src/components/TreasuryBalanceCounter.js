@@ -213,6 +213,7 @@ const TreasuryBalanceCounter = () => {
   const [initialLoad, setInitialLoad] = useState(true);
   const [error, setError] = useState(null);
   const [debugMode, setDebugMode] = useState(false);
+  const [solanaTestResults, setSolanaTestResults] = useState(null);
 
   // Function to fetch balances with progressive loading
   const fetchBalances = async (forceRefresh = false) => {
@@ -313,6 +314,19 @@ const TreasuryBalanceCounter = () => {
   // Handle manual refresh
   const handleRefresh = () => {
     fetchBalances(true); // Force refresh
+  };
+
+  // Test Solana balance fetching
+  const testSolanaBalance = async () => {
+    try {
+      setSolanaTestResults({ testing: true });
+      const results = await treasuryBalanceService.testSolanaBalance();
+      console.log('Solana balance test results:', results);
+      setSolanaTestResults(results);
+    } catch (error) {
+      console.error('Error testing Solana balance:', error);
+      setSolanaTestResults({ error: error.message });
+    }
   };
 
   // Toggle debug mode with Ctrl+Shift+D
@@ -450,6 +464,26 @@ const TreasuryBalanceCounter = () => {
             fontSize: '12px'
           }}>
             <h4 style={{ color: 'yellow', marginBottom: '8px' }}>Debug Info</h4>
+            <div style={{ marginBottom: '10px' }}>
+              <button
+                onClick={testSolanaBalance}
+                style={{
+                  backgroundColor: '#6c5ce7',
+                  color: 'white',
+                  border: 'none',
+                  padding: '5px 10px',
+                  borderRadius: '4px',
+                  marginRight: '10px',
+                  cursor: 'pointer'
+                }}
+              >
+                Test Solana Balance
+              </button>
+              <span style={{ color: '#aaa', fontSize: '10px' }}>
+                {solanaTestResults?.testing ? 'Testing...' : ''}
+              </span>
+            </div>
+
             <pre style={{
               whiteSpace: 'pre-wrap',
               wordBreak: 'break-all',
@@ -466,6 +500,23 @@ const TreasuryBalanceCounter = () => {
                 initialLoad
               }, null, 2)}
             </pre>
+
+            {solanaTestResults && !solanaTestResults.testing && (
+              <div style={{ marginTop: '10px' }}>
+                <h5 style={{ color: '#6c5ce7', marginBottom: '5px' }}>Solana Test Results:</h5>
+                <pre style={{
+                  whiteSpace: 'pre-wrap',
+                  wordBreak: 'break-all',
+                  color: '#aaa',
+                  fontSize: '10px',
+                  maxHeight: '200px',
+                  overflow: 'auto'
+                }}>
+                  {JSON.stringify(solanaTestResults, null, 2)}
+                </pre>
+              </div>
+            )}
+
             <div style={{ marginTop: '8px', fontSize: '10px', color: '#aaa' }}>
               <p>BTC Addresses:</p>
               <ul style={{ marginLeft: '15px' }}>
